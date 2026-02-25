@@ -96,7 +96,7 @@ export function RaceCard({
             </div>
             {/* Name */}
             <h3
-              className={`font-semibold text-[15px] leading-tight truncate ${
+              className={`font-semibold text-[15px] leading-tight ${
                 status === "completed" ? "text-text-muted" : "text-text"
               }`}
             >

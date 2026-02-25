@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import schedule2026 from "../data/schedule2026";
 import { RaceCard } from "../components/RaceCard";
 import { RaceDetail } from "../components/RaceDetail";
@@ -47,6 +47,38 @@ export function SchedulePage({ timezone }: Props) {
     return racesWithStatus[racesWithStatus.length - 1]?.race.round ?? 0;
   }, [racesWithStatus]);
 
+  // Swipe gesture tracking
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const swiped = useRef(false);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    swipeRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    swiped.current = false;
+  }, []);
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!swipeRef.current || swiped.current || selectedIndex === null) return;
+      const dx = e.clientX - swipeRef.current.x;
+      const dy = e.clientY - swipeRef.current.y;
+      const dt = Date.now() - swipeRef.current.t;
+      swipeRef.current = null;
+
+      // Must be horizontal, fast, and deliberate
+      if (dt > 300 || Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx) * 0.7) return;
+
+      swiped.current = true;
+      if (dx < 0 && selectedIndex < schedule2026.length - 1) {
+        setSlideDir("right");
+        setSelectedIndex(selectedIndex + 1);
+      } else if (dx > 0 && selectedIndex > 0) {
+        setSlideDir("left");
+        setSelectedIndex(selectedIndex - 1);
+      }
+    },
+    [selectedIndex]
+  );
+
   if (selectedIndex !== null) {
     const race = schedule2026[selectedIndex];
     const hasPrev = selectedIndex > 0;
@@ -74,7 +106,11 @@ export function SchedulePage({ timezone }: Props) {
           : "page-enter";
 
     return (
-      <div className="page-enter">
+      <div
+        className="page-enter touch-pan-y"
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+      >
         {/* Top bar: back + race navigator */}
         <div className="flex items-center justify-between px-3 pt-3">
           <button
