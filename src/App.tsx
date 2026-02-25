@@ -33,9 +33,9 @@ export default function App() {
   }, [activeTab, timezone, setTimezone, theme, setTheme]);
 
   return (
-    <div className="flex flex-col min-h-svh bg-bg text-text">
+    <div className="min-h-svh bg-bg text-text">
       <Header activeTab={activeTab} />
-      <main className="flex-1 pb-16 overflow-y-auto">
+      <main className="pt-14 pb-20">
         <div key={activeTab} className="page-enter">
           {renderPage()}
         </div>

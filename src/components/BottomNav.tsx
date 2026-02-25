@@ -29,7 +29,7 @@ interface BottomNavProps {
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const navRef = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
-  const [bounceKey, setBounceKey] = useState(0);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!navRef.current) return;
@@ -41,21 +41,20 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     const navRect = navRef.current.getBoundingClientRect();
     const btnRect = btn.getBoundingClientRect();
     setIndicator({
-      left: btnRect.left - navRect.left + btnRect.width * 0.2,
-      width: btnRect.width * 0.6,
+      left: btnRect.left - navRect.left + btnRect.width * 0.15,
+      width: btnRect.width * 0.7,
     });
-    setBounceKey((k) => k + 1);
-  }, [activeTab]);
+    if (!ready) setReady(true);
+  }, [activeTab, ready]);
 
   return (
-    <nav className="glass safe-bottom fixed bottom-0 left-0 right-0 z-50">
+    <nav className="glass safe-bottom fixed bottom-0 left-0 right-0 z-50 border-x-0 border-b-0">
       {/* Top accent line */}
-      <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
-      <div ref={navRef} className="relative flex items-stretch max-w-md mx-auto">
-        {/* Bouncy sliding indicator */}
+      <div className="h-px bg-linear-to-r from-transparent via-accent/50 to-transparent" />
+      <div ref={navRef} className="relative flex items-stretch max-w-lg mx-auto">
+        {/* Sliding bouncy indicator */}
         <div
-          key={bounceKey}
-          className="tab-indicator absolute top-0 h-[2px] rounded-full bg-accent shadow-[0_0_8px_rgba(225,6,0,0.5)]"
+          className={`tab-indicator absolute top-0 h-0.75 rounded-full bg-accent shadow-[0_0_12px_rgba(225,6,0,0.6)] ${ready ? "" : "opacity-0"}`}
           style={{ left: indicator.left, width: indicator.width }}
         />
 
@@ -67,20 +66,20 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               key={tab.id}
               data-tab={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className="flex-1 flex flex-col items-center gap-px py-2 pt-2.5 relative"
+              className="flex-1 flex flex-col items-center gap-0.5 py-2.5 pt-3 relative min-h-13"
             >
               <Icon
-                size={18}
+                size={22}
                 strokeWidth={isActive ? 2.5 : 1.5}
-                className={`transition-all duration-150 ${
+                className={`transition-all duration-200 ${
                   isActive
-                    ? "text-accent drop-shadow-[0_0_8px_rgba(225,6,0,0.6)] scale-110"
+                    ? "text-accent drop-shadow-[0_0_10px_rgba(225,6,0,0.6)] scale-110"
                     : "text-text-muted"
                 }`}
               />
               <span
-                className={`text-[9px] tracking-wider font-semibold uppercase transition-all duration-150 ${
-                  isActive ? "text-accent" : "text-text-muted/50"
+                className={`text-[11px] tracking-wider font-semibold uppercase transition-all duration-200 ${
+                  isActive ? "text-accent" : "text-text-muted/60"
                 }`}
               >
                 {tab.label}

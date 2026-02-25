@@ -3,7 +3,9 @@ import type { Race, RaceStatus, Session } from "../types";
 import { formatSessionDate, formatSessionTime, getTimezoneAbbr } from "../utils/time";
 import { useCountdown } from "../hooks/useCountdown";
 import { getFlagUrl } from "../utils/countries";
-import { MapPin, Clock, Zap } from "lucide-react";
+import { getCircuitStats } from "../data/circuits";
+import { MapPin, Clock, Zap, Moon, ChevronRight, Check } from "lucide-react";
+import { FlipDigit } from "./FlipDigit";
 
 interface Props {
   race: Race;
@@ -11,6 +13,7 @@ interface Props {
   nextSession: Session | null;
   timezone: string;
   isHighlighted: boolean;
+  isNext: boolean;
   onSelect: () => void;
 }
 
@@ -26,16 +29,24 @@ const BADGE: Record<RaceStatus, string> = {
   upcoming: "bg-highlight/8 text-highlight/80 border border-highlight/12",
 };
 
+const TYPE_SHORT: Record<string, string> = {
+  permanent: "Perm",
+  street: "Street",
+  hybrid: "Hybrid",
+};
+
 export function RaceCard({
   race,
   status,
   nextSession,
   timezone,
   isHighlighted,
+  isNext,
   onSelect,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const countdown = useCountdown(nextSession?.dateUtc ?? null);
+  const stats = getCircuitStats(race.circuit.id);
 
   useEffect(() => {
     if (isHighlighted && ref.current) {
@@ -50,84 +61,116 @@ export function RaceCard({
       ref={ref}
       onClick={onSelect}
       className={`
-        glass-light rounded-lg px-2.5 py-2 cursor-pointer border-l-2 card-hover
+        glass-light rounded-xl px-3.5 py-3 cursor-pointer border-l-[3px] card-hover
         ${STATUS_BORDER[status]}
-        ${status === "completed" ? "opacity-50" : ""}
+        ${status === "completed" ? "opacity-45" : ""}
         ${status === "active" ? "glow-active" : ""}
-        ${isHighlighted ? "ring-1 ring-accent/20" : ""}
+        ${isHighlighted ? "ring-1 ring-accent/25" : ""}
       `}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           {/* Flag */}
           <img
             src={getFlagUrl(race.circuit.countryCode)}
             alt={race.circuit.country}
-            className="w-7 h-5 rounded-[3px] object-cover shadow-sm shrink-0"
+            className="w-9 h-6 rounded object-cover shadow-sm shrink-0"
             loading="lazy"
           />
 
           <div className="min-w-0">
-            {/* Round + Sprint tag */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-display font-semibold text-text-muted tracking-widest">
+            {/* Round + Night/Sprint tags */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-display font-semibold text-text-muted tracking-widest">
                 {race.type === "testing" ? "TEST" : `R${String(race.round).padStart(2, "0")}`}
               </span>
+              {stats?.night && (
+                <Moon size={12} className="text-highlight/70" />
+              )}
               {race.type === "sprint" && (
-                <span className="inline-flex items-center gap-px text-[8px] font-bold text-warning bg-warning/8 px-1 py-px rounded tracking-wider border border-warning/15">
-                  <Zap size={7} />
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-warning bg-warning/10 px-1.5 py-0.5 rounded tracking-wider border border-warning/15">
+                  <Zap size={11} />
                   SPR
                 </span>
               )}
             </div>
             {/* Name */}
             <h3
-              className={`font-semibold text-[13px] leading-tight truncate ${
-                status === "completed" ? "line-through text-text-muted" : "text-text"
+              className={`font-semibold text-[15px] leading-tight truncate ${
+                status === "completed" ? "text-text-muted" : "text-text"
               }`}
             >
               {race.name}
             </h3>
-            {/* Location */}
-            <div className="flex items-center gap-1 text-[10px] text-text-muted mt-px">
-              <MapPin size={8} className="shrink-0" />
-              <span className="truncate">{race.circuit.location}</span>
+            {/* Location + circuit type */}
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-0.5">
+              <MapPin size={11} className="shrink-0 text-text-muted" />
+              <span className="truncate">
+                {race.circuit.location}
+                {stats?.type && (
+                  <span className="text-text-muted"> · {TYPE_SHORT[stats.type]}</span>
+                )}
+              </span>
             </div>
+            {/* Active: session progress dots */}
+            {status === "active" && (
+              <div className="flex items-center gap-1 mt-1">
+                {race.sessions.map((s, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      new Date(s.dateUtc) < new Date() ? "bg-success" : "bg-border-light"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right side: status + time */}
-        <div className="flex flex-col items-end shrink-0 gap-1">
-          <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-px rounded ${BADGE[status]}`}>
-            {status === "active" && (
-              <span className="inline-block w-1 h-1 rounded-full bg-live live-dot mr-0.5 align-middle" />
+        {/* Right side: status + time + chevron */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col items-end gap-1.5">
+            {isNext ? (
+              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/25 shadow-[0_0_8px_rgba(225,6,0,0.15)]">
+                NEXT
+              </span>
+            ) : (
+              <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${BADGE[status]}`}>
+                {status === "active" && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-live live-dot" />
+                )}
+                {status === "completed" && <Check size={11} />}
+                {status}
+              </span>
             )}
-            {status}
-          </span>
 
-          {status === "upcoming" && raceSession && (
-            <div className="text-right">
-              <div className="text-[9px] text-text-muted tabular-nums flex items-center gap-0.5 justify-end">
-                <Clock size={7} />
-                {formatSessionDate(raceSession.dateUtc, timezone)}
+            {status === "upcoming" && raceSession && (
+              <div className="text-right">
+                <div className="text-[11px] text-text-muted tabular-nums flex items-center gap-1 justify-end">
+                  <Clock size={12} />
+                  {formatSessionDate(raceSession.dateUtc, timezone)}
+                </div>
+                <div className="text-[11px] text-text-secondary tabular-nums">
+                  {formatSessionTime(raceSession.dateUtc, timezone)}{" "}
+                  <span className="text-text-muted">{getTimezoneAbbr(timezone)}</span>
+                </div>
               </div>
-              <div className="text-[9px] text-text-secondary tabular-nums">
-                {formatSessionTime(raceSession.dateUtc, timezone)}{" "}
-                <span className="text-text-muted">{getTimezoneAbbr(timezone)}</span>
-              </div>
-            </div>
-          )}
+            )}
 
-          {status === "active" && countdown && nextSession && (
-            <div className="text-right">
-              <div className="text-[8px] text-text-muted tracking-wide">{nextSession.name}</div>
-              <div className="font-display text-[11px] font-bold text-accent tabular-nums leading-none">
-                {countdown.days > 0 && `${countdown.days}d `}
-                {countdown.hours > 0 && `${countdown.hours}h `}
-                {String(countdown.minutes).padStart(2, "0")}:{String(countdown.seconds).padStart(2, "0")}
+            {status === "active" && countdown && nextSession && (
+              <div className="text-right">
+                <div className="text-[11px] text-text-muted tracking-wide">{nextSession.name}</div>
+                <div className="font-display text-sm font-bold text-accent tabular-nums leading-none">
+                  {countdown.days > 0 && <><FlipDigit value={String(countdown.days)} />d </>}
+                  {countdown.hours > 0 && <><FlipDigit value={String(countdown.hours)} />h </>}
+                  <FlipDigit value={String(countdown.minutes).padStart(2, "0")} />:<FlipDigit value={String(countdown.seconds).padStart(2, "0")} />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <ChevronRight size={14} className="text-text-muted/30" />
         </div>
       </div>
     </div>

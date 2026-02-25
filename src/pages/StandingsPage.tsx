@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getTeamColor } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
-import { Trophy, Users, RefreshCw, AlertCircle } from "lucide-react";
+import { Trophy, Users, RefreshCw, AlertCircle, Info } from "lucide-react";
 
 interface Driver {
   position: number;
@@ -18,11 +18,22 @@ interface Driver {
   };
 }
 
+const FIRST_RACE_2026 = new Date("2026-03-08T04:00:00Z");
+
 export function StandingsPage() {
   const [view, setView] = useState<"drivers" | "constructors">("drivers");
+  const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isPreSeason = new Date() < FIRST_RACE_2026;
+
+  const switchView = (v: "drivers" | "constructors") => {
+    if (v === view) return;
+    setSlideDir(v === "constructors" ? "right" : "left");
+    setView(v);
+  };
 
   const fetchStandings = useCallback(async () => {
     setLoading(true);
@@ -57,21 +68,50 @@ export function StandingsPage() {
   const sortedConstructors = Object.entries(constructors).sort(([, a], [, b]) => b.points - a.points);
   const leaderPts = drivers.length > 0 ? drivers[0].points : 0;
 
+  const slideClass =
+    slideDir === "right"
+      ? "slide-from-right"
+      : slideDir === "left"
+        ? "slide-from-left"
+        : "";
+
   return (
-    <div className="px-2.5 pt-2.5 space-y-2 max-w-2xl mx-auto">
-      {/* Toggle */}
-      <div className="glass rounded-lg p-0.5 flex">
+    <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
+      {/* 2025 season banner */}
+      {isPreSeason && !loading && !error && drivers.length > 0 && (
+        <div className="season-banner glass rounded-xl px-4 py-3 flex items-start gap-3 border border-warning/20 bg-warning/5">
+          <Info size={18} className="text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-warning">2025 Season Standings</p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              The 2026 season begins March 8 in Melbourne. Standings will update automatically.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Toggle with sliding indicator */}
+      <div className="glass rounded-xl p-1 flex relative overflow-hidden">
+        {/* Sliding pill */}
+        <div
+          className="absolute top-1 bottom-1 rounded-lg bg-accent shadow-md shadow-accent/20"
+          style={{
+            width: "calc(50% - 4px)",
+            left: view === "drivers" ? "4px" : "50%",
+            transition: "left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }}
+        />
         {(["drivers", "constructors"] as const).map((v) => (
           <button
             key={v}
-            onClick={() => setView(v)}
-            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wider transition-all duration-150 ${
+            onClick={() => switchView(v)}
+            className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-semibold uppercase tracking-wider transition-colors duration-200 ${
               view === v
-                ? "bg-accent text-white shadow-md shadow-accent/20"
+                ? "text-white"
                 : "text-text-muted hover:text-text-secondary"
             }`}
           >
-            {v === "drivers" ? <Trophy size={11} /> : <Users size={11} />}
+            {v === "drivers" ? <Trophy size={14} /> : <Users size={14} />}
             {v}
           </button>
         ))}
@@ -79,97 +119,102 @@ export function StandingsPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="skeleton h-12 rounded-lg" />
+            <div key={i} className="skeleton h-14 rounded-xl" />
           ))}
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="glass rounded-xl p-5 text-center space-y-2">
-          <AlertCircle size={24} className="mx-auto text-live" />
-          <p className="text-xs text-text-secondary">{error}</p>
-          <button onClick={fetchStandings} className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent">
-            <RefreshCw size={10} /> Retry
+        <div className="glass rounded-xl p-6 text-center space-y-3">
+          <AlertCircle size={28} className="mx-auto text-live" />
+          <p className="text-sm text-text-secondary">{error}</p>
+          <button onClick={fetchStandings} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
+            <RefreshCw size={12} /> Retry
           </button>
         </div>
       )}
 
-      {/* Drivers */}
-      {!loading && !error && view === "drivers" && (
-        <div className="space-y-1">
-          {drivers.map((d, i) => {
-            const color = getTeamColor(d.team?.teamId ?? "");
-            const cc = getCountryCode(d.driver.nationality);
-            const behind = d.points < leaderPts ? leaderPts - d.points : 0;
+      {/* Content with slide animation */}
+      {!loading && !error && (
+        <div key={view} className={slideClass}>
+          {/* Drivers */}
+          {view === "drivers" && (
+            <div className="space-y-1.5">
+              {drivers.map((d, i) => {
+                const color = getTeamColor(d.team?.teamId ?? "");
+                const cc = getCountryCode(d.driver.nationality);
+                const behind = d.points < leaderPts ? leaderPts - d.points : 0;
 
-            return (
-              <div
-                key={d.driver.surname}
-                className="stagger-item glass-light rounded-lg px-2 py-1.5 flex items-center gap-2 border-l-2 card-hover"
-                style={{
-                  borderLeftColor: color,
-                  animationDelay: `${Math.min(i * 15, 200)}ms`,
-                }}
-              >
-                <span className="font-display text-[13px] font-bold text-text-muted w-5 text-center tabular-nums shrink-0">
-                  {d.position}
-                </span>
-                <img src={getFlagUrl(cc)} alt="" className="w-5 h-3.5 rounded-sm object-cover shrink-0" loading="lazy" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-text truncate">
-                    {d.driver.name} <span className="text-text-secondary font-normal">{d.driver.surname}</span>
-                  </p>
-                  <p className="text-[9px] font-medium uppercase tracking-wider truncate" style={{ color }}>{d.team?.teamName}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="font-display text-[12px] font-bold text-text tabular-nums">{d.points}</span>
-                  <span className="text-[8px] text-text-muted ml-px">pts</span>
-                  {behind > 0 && <p className="text-[8px] text-text-muted tabular-nums">-{behind}</p>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Constructors */}
-      {!loading && !error && view === "constructors" && (
-        <div className="space-y-1.5">
-          {sortedConstructors.map(([id, team], idx) => {
-            const leaderTeamPts = sortedConstructors[0]?.[1].points ?? 0;
-            const behind = team.points < leaderTeamPts ? leaderTeamPts - team.points : 0;
-
-            return (
-              <div
-                key={id}
-                className="stagger-item glass-light rounded-lg overflow-hidden border-l-2"
-                style={{ borderLeftColor: team.color, animationDelay: `${idx * 30}ms` }}
-              >
-                <div className="px-2.5 py-1.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-[13px] font-bold text-text-muted tabular-nums">{idx + 1}</span>
-                    <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: team.color }}>{team.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-display text-[12px] font-bold text-text tabular-nums">{team.points}</span>
-                    <span className="text-[8px] text-text-muted">pts</span>
-                    {behind > 0 && <span className="text-[8px] text-text-muted tabular-nums">-{behind}</span>}
-                  </div>
-                </div>
-                <div className="border-t border-glass-border divide-y divide-glass-border">
-                  {team.drivers.map((d) => (
-                    <div key={d.driver.surname} className="px-2.5 py-1 flex items-center justify-between text-[11px]">
-                      <span className="text-text-secondary">{d.driver.name} {d.driver.surname}</span>
-                      <span className="font-semibold text-text tabular-nums">{d.points}</span>
+                return (
+                  <div
+                    key={d.driver.surname}
+                    className="stagger-item glass-light rounded-xl px-3 py-2.5 flex items-center gap-3 border-l-[3px] card-hover"
+                    style={{
+                      borderLeftColor: color,
+                      animationDelay: `${Math.min(i * 15, 200)}ms`,
+                    }}
+                  >
+                    <span className="font-display text-[15px] font-bold text-text-muted w-6 text-center tabular-nums shrink-0">
+                      {d.position}
+                    </span>
+                    <img src={getFlagUrl(cc)} alt="" className="w-6 h-4 rounded-sm object-cover shrink-0" loading="lazy" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-text truncate">
+                        {d.driver.name} <span className="text-text-secondary font-normal">{d.driver.surname}</span>
+                      </p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider truncate" style={{ color }}>{d.team?.teamName}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+                    <div className="text-right shrink-0">
+                      <span className="font-display text-sm font-bold text-text tabular-nums">{d.points}</span>
+                      <span className="text-[11px] text-text-muted ml-0.5">pts</span>
+                      {behind > 0 && <p className="text-[11px] text-text-muted tabular-nums">-{behind}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Constructors */}
+          {view === "constructors" && (
+            <div className="space-y-2">
+              {sortedConstructors.map(([id, team], idx) => {
+                const leaderTeamPts = sortedConstructors[0]?.[1].points ?? 0;
+                const behind = team.points < leaderTeamPts ? leaderTeamPts - team.points : 0;
+
+                return (
+                  <div
+                    key={id}
+                    className="stagger-item glass-light rounded-xl overflow-hidden border-l-[3px]"
+                    style={{ borderLeftColor: team.color, animationDelay: `${idx * 30}ms` }}
+                  >
+                    <div className="px-3.5 py-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-display text-[15px] font-bold text-text-muted tabular-nums">{idx + 1}</span>
+                        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: team.color }}>{team.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-sm font-bold text-text tabular-nums">{team.points}</span>
+                        <span className="text-[11px] text-text-muted">pts</span>
+                        {behind > 0 && <span className="text-[11px] text-text-muted tabular-nums">-{behind}</span>}
+                      </div>
+                    </div>
+                    <div className="border-t border-glass-border divide-y divide-glass-border">
+                      {team.drivers.map((d) => (
+                        <div key={d.driver.surname} className="px-3.5 py-1.5 flex items-center justify-between text-[13px]">
+                          <span className="text-text-secondary">{d.driver.name} {d.driver.surname}</span>
+                          <span className="font-semibold text-text tabular-nums">{d.points}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -5,42 +5,73 @@ import {
   getTimezoneAbbr,
 } from "../utils/time";
 import { useCountdown } from "../hooks/useCountdown";
-import { getNextSession } from "../utils/time";
+import { getNextSession, getRaceStatus } from "../utils/time";
 import { getFlagUrl } from "../utils/countries";
-import { MapPin, Clock, Zap, Flag } from "lucide-react";
+import { getCircuitStats } from "../data/circuits";
+import {
+  MapPin,
+  Clock,
+  Zap,
+  Flag,
+  CheckCircle2,
+  Check,
+  Moon,
+  Ruler,
+  CornerDownRight,
+  Trophy,
+  ExternalLink,
+  CircleDot,
+  Crosshair,
+} from "lucide-react";
+import { FlipDigit } from "./FlipDigit";
 
 interface Props {
   race: Race;
   timezone: string;
+  globalNextSessionDate: string | null;
 }
 
-export function RaceDetail({ race, timezone }: Props) {
+const TRACK_TYPE_LABEL: Record<string, string> = {
+  permanent: "Permanent",
+  street: "Street Circuit",
+  hybrid: "Hybrid",
+};
+
+export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
   const nextSession = getNextSession(race);
   const countdown = useCountdown(nextSession?.dateUtc ?? null);
+  const raceStatus = getRaceStatus(race);
+  const isCompleted = raceStatus === "completed";
   const tzAbbr = getTimezoneAbbr(timezone);
+  const stats = getCircuitStats(race.circuit.id);
 
   return (
-    <div className="px-3 py-3 space-y-2.5 max-w-2xl mx-auto">
-      {/* Hero */}
-      <div className="glass rounded-xl p-3 space-y-2.5">
-        <div className="flex items-center gap-2.5">
+    <div className="px-3 py-4 space-y-2.5 max-w-2xl mx-auto">
+      {/* Hero card */}
+      <div className="glass-light rounded-xl p-4 space-y-3 border-l-[3px] border-l-accent">
+        <div className="flex items-center gap-3">
           <img
             src={getFlagUrl(race.circuit.countryCode)}
             alt={race.circuit.country}
-            className="w-10 h-7 rounded object-cover shadow-md"
+            className="w-12 h-8 rounded-lg object-cover shadow-md"
           />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-display font-semibold text-text-muted tracking-widest">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-display font-semibold text-text-muted tracking-widest">
                 {race.type === "testing" ? "PRE-SEASON" : `ROUND ${race.round}`}
               </span>
+              {stats?.night && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-highlight/80 bg-highlight/8 px-1.5 py-0.5 rounded border border-highlight/15">
+                  <Moon size={11} /> NIGHT
+                </span>
+              )}
               {race.type === "sprint" && (
-                <span className="inline-flex items-center gap-px text-[8px] font-bold text-warning bg-warning/8 px-1 py-px rounded border border-warning/15">
-                  <Zap size={7} /> SPRINT
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-warning bg-warning/10 px-1.5 py-0.5 rounded border border-warning/15">
+                  <Zap size={11} /> SPRINT
                 </span>
               )}
             </div>
-            <h2 className="font-display text-base font-bold tracking-wide text-text leading-tight truncate">
+            <h2 className="font-display text-lg font-bold tracking-wide text-text leading-tight truncate">
               {race.name}
             </h2>
           </div>
@@ -48,24 +79,34 @@ export function RaceDetail({ race, timezone }: Props) {
 
         <div className="h-px bg-linear-to-r from-transparent via-border-light to-transparent" />
 
-        <p className="text-[8px] text-text-muted uppercase tracking-[0.15em] leading-relaxed">
+        <p className="text-[11px] text-text-muted uppercase tracking-[0.15em] leading-relaxed">
           {race.officialName}
         </p>
 
-        <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-          <MapPin size={11} className="text-highlight shrink-0" />
+        <div className="flex items-center gap-2 text-[13px] text-text-secondary">
+          <MapPin size={13} className="text-highlight shrink-0" />
           <span className="truncate">
             {race.circuit.name} — {race.circuit.location}, {race.circuit.country}
           </span>
         </div>
 
+        {/* Race completed banner */}
+        {isCompleted && (
+          <div className="glass-light rounded-lg px-4 min-h-26 flex flex-col items-center justify-center text-center space-y-2 border border-success/20">
+            <CheckCircle2 size={32} className="text-success" />
+            <p className="font-display text-sm font-bold text-success tracking-widest uppercase">
+              Race Complete
+            </p>
+          </div>
+        )}
+
         {/* Countdown */}
-        {countdown && nextSession && countdown.total > 0 && (
-          <div className="glass rounded-lg p-3 text-center space-y-1.5 border border-accent/10">
-            <p className="text-[9px] text-text-muted uppercase tracking-[0.2em] font-medium">
+        {!isCompleted && countdown && nextSession && countdown.total > 0 && (
+          <div className="glass-light rounded-lg px-4 min-h-26 flex flex-col items-center justify-center text-center space-y-2 border border-accent/15">
+            <p className="text-[11px] text-text-muted uppercase tracking-[0.2em] font-medium">
               {nextSession.name} starts in
             </p>
-            <div className="flex justify-center gap-2.5">
+            <div className="flex justify-center gap-4">
               {[
                 { val: countdown.days, label: "D" },
                 { val: countdown.hours, label: "H" },
@@ -73,10 +114,10 @@ export function RaceDetail({ race, timezone }: Props) {
                 { val: countdown.seconds, label: "S" },
               ].map((unit) => (
                 <div key={unit.label} className="text-center">
-                  <div className="font-display text-xl font-bold text-accent tabular-nums leading-none num-tick">
-                    {String(unit.val).padStart(2, "0")}
+                  <div className="font-display text-2xl font-bold text-accent tabular-nums leading-none">
+                    <FlipDigit value={String(unit.val).padStart(2, "0")} />
                   </div>
-                  <div className="text-[8px] text-text-muted tracking-widest mt-0.5 font-medium">
+                  <div className="text-[11px] text-text-muted tracking-widest mt-1 font-medium">
                     {unit.label}
                   </div>
                 </div>
@@ -84,58 +125,117 @@ export function RaceDetail({ race, timezone }: Props) {
             </div>
           </div>
         )}
+
+        {/* Track stats — slim inline strip */}
+        {stats && (
+          <>
+            <div className="h-px bg-linear-to-r from-transparent via-border-light to-transparent" />
+
+            <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1 text-text-secondary">
+                  <Ruler size={11} className="text-highlight" />
+                  <span className="font-semibold text-text tabular-nums">{stats.lengthKm}</span> km
+                </span>
+                <span className="text-border-light">|</span>
+                <span className="flex items-center gap-1 text-text-secondary">
+                  <CornerDownRight size={11} className="text-highlight" />
+                  <span className="font-semibold text-text tabular-nums">{stats.turns}</span> turns
+                </span>
+                <span className="text-border-light">|</span>
+                <span className="flex items-center gap-1 text-text-secondary">
+                  <Zap size={11} className="text-warning" />
+                  <span className="font-semibold text-text tabular-nums">{stats.drsZones}</span> DRS
+                </span>
+              </div>
+              <span className="text-text-muted font-medium">{TRACK_TYPE_LABEL[stats.type]}</span>
+            </div>
+
+            {stats.lapRecord && (
+              <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5 text-text-secondary">
+                  <Trophy size={11} className="text-warning" />
+                  Lap record
+                </div>
+                <span>
+                  <span className="font-display font-bold text-accent tabular-nums">{stats.lapRecord.time}</span>
+                  <span className="text-text-muted ml-1.5">{stats.lapRecord.driver} ({stats.lapRecord.year})</span>
+                </span>
+              </div>
+            )}
+
+            <a
+              href={stats.wiki}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-highlight tracking-wide py-1 -mb-1 hover:text-accent transition-colors duration-150"
+            >
+              View on Wikipedia <ExternalLink size={11} />
+            </a>
+          </>
+        )}
       </div>
 
       {/* Session schedule */}
-      <div className="glass rounded-xl overflow-hidden">
-        <div className="px-3 py-2 flex items-center justify-between border-b border-glass-border">
-          <h3 className="font-display text-[10px] font-semibold tracking-widest text-text-muted uppercase flex items-center gap-1.5">
-            <Clock size={10} />
+      <div className="glass-light rounded-xl overflow-hidden border-l-[3px] border-l-highlight/40">
+        <div className="px-4 py-2.5 flex items-center justify-between border-b border-glass-border">
+          <h3 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase flex items-center gap-2">
+            <Clock size={12} />
             Sessions
           </h3>
-          <span className="text-[9px] text-highlight font-mono tracking-wider">{tzAbbr}</span>
+          <span className="text-[11px] text-highlight font-mono tracking-wider">{tzAbbr}</span>
         </div>
 
         <div className="divide-y divide-glass-border">
           {race.sessions.map((session, i) => {
             const isPast = new Date(session.dateUtc) < new Date();
-            const isNext = nextSession && session.dateUtc === nextSession.dateUtc;
+            const isGlobalNext = globalNextSessionDate && session.dateUtc === globalNextSessionDate;
             const isRace = session.name === "Race";
             const isSprint = session.name === "Sprint" || session.name === "Sprint Qualifying";
+            const isQualifying = session.name === "Qualifying";
 
             return (
               <div
                 key={i}
                 className={`
-                  flex items-center justify-between px-3 py-2 transition-colors duration-100
-                  ${isNext ? "bg-accent/8 border-l-2 border-l-accent" : "border-l-2 border-l-transparent"}
-                  ${isPast ? "opacity-35" : ""}
+                  flex items-center justify-between px-4 py-2.5 transition-colors duration-100
+                  ${isGlobalNext ? "bg-accent/8 border-l-[3px] border-l-accent" : "border-l-[3px] border-l-transparent"}
+                  ${isPast ? "opacity-40" : ""}
                 `}
               >
-                <div className="flex items-center gap-2">
-                  {isRace ? (
-                    <Flag size={11} className="text-accent" />
+                <div className="flex items-center gap-2.5">
+                  {isPast ? (
+                    <Check size={14} className="text-success shrink-0" />
+                  ) : isRace ? (
+                    <Flag size={14} className="text-accent" />
                   ) : isSprint ? (
-                    <Zap size={11} className="text-warning" />
+                    <Zap size={14} className="text-warning" />
+                  ) : isQualifying ? (
+                    <Crosshair size={14} className="text-highlight" />
                   ) : (
-                    <div className="w-[11px]" />
+                    <CircleDot size={14} className="text-highlight/50" />
                   )}
                   <span
-                    className={`text-[12px] font-medium ${
-                      isRace ? "text-text font-semibold" : isSprint ? "text-warning" : "text-text-secondary"
+                    className={`text-sm font-medium ${
+                      isPast ? "text-text-muted line-through" : isRace ? "text-text font-semibold" : isSprint ? "text-warning" : isQualifying ? "text-highlight" : "text-text-secondary"
                     }`}
                   >
                     {session.name}
                   </span>
-                  {isNext && (
-                    <span className="text-[7px] font-bold text-accent bg-accent/12 px-1 py-px rounded tracking-widest uppercase border border-accent/15">
+                  {isGlobalNext && (
+                    <span className="text-[11px] font-bold text-accent bg-accent/12 px-1.5 py-0.5 rounded tracking-widest uppercase border border-accent/15">
                       Next
                     </span>
                   )}
                 </div>
-                <div className="text-right tabular-nums">
-                  <div className="text-[11px] text-text-secondary">{formatSessionTime(session.dateUtc, timezone)}</div>
-                  <div className="text-[9px] text-text-muted">{formatSessionDate(session.dateUtc, timezone)}</div>
+                <div className="flex items-center gap-2 tabular-nums">
+                  <div className="text-right">
+                    <div className={`text-[13px] ${isPast ? "text-text-muted line-through" : "text-text-secondary"}`}>{formatSessionTime(session.dateUtc, timezone)}</div>
+                    <div className="text-[11px] text-text-muted">{formatSessionDate(session.dateUtc, timezone)}</div>
+                  </div>
+                  {!isPast && (
+                    <Clock size={13} className="text-text-muted/30 shrink-0" />
+                  )}
                 </div>
               </div>
             );
