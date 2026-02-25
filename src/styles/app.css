@@ -57,14 +57,12 @@ body {
 .glass {
   background: var(--color-glass);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--color-glass-border);
 }
 
 .glass-light {
   background: var(--color-glass-light);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--color-glass-border);
 }
 
