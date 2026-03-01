@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Youtube, Bookmark, Newspaper, MessageCircle, Calendar } from "lucide-react";
 import { fetchNews, SOURCE_COLORS } from "../api/fetchers";
@@ -43,8 +42,8 @@ export function NewsPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const manualRefresh = useRef(false);
   const wasFetching = useRef(false);
-  const hasLoaded = useRef(false);
 
   const showToast = useCallback((type: "success" | "error") => {
     clearTimeout(toastTimer.current);
@@ -53,20 +52,23 @@ export function NewsPage() {
     toastTimer.current = setTimeout(() => setToastVisible(false), 2000);
   }, []);
 
-  // Toast on refetch complete (skip initial load)
-  useEffect(() => {
-    if (!isLoading) hasLoaded.current = true;
-    if (wasFetching.current && !isFetching && hasLoaded.current) {
-      showToast(error ? "error" : "success");
-    }
-    wasFetching.current = isFetching;
-  }, [isFetching, isLoading, error, showToast]);
+  // Toast only on manual refresh completion
+  if (wasFetching.current && !isFetching && manualRefresh.current) {
+    manualRefresh.current = false;
+    showToast(error ? "error" : "success");
+  }
+  wasFetching.current = isFetching;
+
+  const handleRefresh = () => {
+    manualRefresh.current = true;
+    queryClient.invalidateQueries({ queryKey: ["news"] });
+  };
 
   const refreshing = isFetching && !isLoading;
 
   return (
     <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
-      {/* Toast — portaled to body to escape motion.div transform */}
+      {/* Toast — portaled to body */}
       {createPortal(
         <div
           className={`fixed top-40 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
@@ -129,7 +131,7 @@ export function NewsPage() {
           )}
         </div>
         <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["news"] })}
+          onClick={handleRefresh}
           disabled={refreshing}
           className={`p-2 rounded-lg transition-all duration-150 disabled:opacity-40 ${
             refreshing
@@ -155,7 +157,7 @@ export function NewsPage() {
         <div className="glass rounded-xl p-6 text-center space-y-3">
           <AlertCircle size={28} className="mx-auto text-live" />
           <p className="text-sm text-text-secondary">{error instanceof Error ? error.message : "Failed to load news"}</p>
-          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["news"] })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
+          <button onClick={handleRefresh} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
             <RefreshCw size={12} /> Retry
           </button>
         </div>
@@ -170,19 +172,17 @@ export function NewsPage() {
         const sourceColor = SOURCE_COLORS[item.source] ?? "text-text-muted";
 
         return (
-          <motion.a
+          <a
             key={`${item.source}-${i}`}
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i * 0.025, 0.2), duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className={`glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] group ${
+            className={`stagger-item glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] group ${
               isFeatured
                 ? "border-l-accent bg-accent/5"
                 : "border-l-highlight/30 active:border-l-accent"
             }`}
+            style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
           >
             {isFeatured && (
               <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-0.5">
@@ -209,7 +209,7 @@ export function NewsPage() {
             <span className="inline-flex items-center gap-1 text-[11px] text-highlight font-medium tracking-wide">
               Read more <ExternalLink size={11} />
             </span>
-          </motion.a>
+          </a>
         );
       })}
       </div>

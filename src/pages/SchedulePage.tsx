@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import schedule2026 from "../data/schedule2026";
 import { RaceCard } from "../components/RaceCard";
 import { RaceDetail } from "../components/RaceDetail";
@@ -9,18 +8,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 interface Props {
   timezone: string;
 }
-
-const slideVariants = {
-  enter: (dir: "left" | "right" | null) => ({
-    x: dir === "right" ? 40 : dir === "left" ? -40 : 0,
-    opacity: 0,
-  }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: "left" | "right" | null) => ({
-    x: dir === "right" ? -40 : dir === "left" ? 40 : 0,
-    opacity: 0,
-  }),
-};
 
 export function SchedulePage({ timezone }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -112,11 +99,8 @@ export function SchedulePage({ timezone }: Props) {
     };
 
     return (
-      <motion.div
-        className="touch-pan-y"
-        initial={{ x: "100%", opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      <div
+        className="slide-in touch-pan-y overflow-x-hidden"
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
@@ -157,21 +141,14 @@ export function SchedulePage({ timezone }: Props) {
           </div>
         </div>
 
-        {/* Race detail — AnimatePresence for swipe slide */}
-        <AnimatePresence mode="wait" custom={slideDir}>
-          <motion.div
-            key={selectedIndex}
-            custom={slideDir}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <RaceDetail race={race} timezone={timezone} globalNextSessionDate={globalNextSessionDate} />
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
+        {/* Race detail — CSS slide for swipe */}
+        <div
+          key={selectedIndex}
+          className={slideDir === "right" ? "slide-from-right" : slideDir === "left" ? "slide-from-left" : "page-enter"}
+        >
+          <RaceDetail race={race} timezone={timezone} globalNextSessionDate={globalNextSessionDate} />
+        </div>
+      </div>
     );
   }
 
@@ -195,11 +172,10 @@ export function SchedulePage({ timezone }: Props) {
       </div>
 
       {racesWithStatus.map(({ race, status, nextSession }, i) => (
-        <motion.div
+        <div
           key={race.round}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: Math.min(i * 0.02, 0.3), duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="stagger-item"
+          style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
         >
           <RaceCard
             race={race}
@@ -213,7 +189,7 @@ export function SchedulePage({ timezone }: Props) {
               setSelectedIndex(i);
             }}
           />
-        </motion.div>
+        </div>
       ))}
     </div>
   );

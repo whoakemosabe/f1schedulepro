@@ -24,12 +24,12 @@ const SESSION_DURATION_MIN: Record<string, number> = {
   "Race": 150,
 };
 
-// Session-type badge (secondary info only)
+// Session-type badge colors
 function getSessionBadge(name: string) {
-  if (name === "Race") return "bg-accent/15 text-accent border-accent/25";
-  if (name.includes("Sprint")) return "bg-warning/15 text-warning border-warning/25";
-  if (name === "Qualifying") return "bg-highlight/15 text-highlight border-highlight/25";
-  return "bg-highlight/10 text-highlight/70 border-highlight/15";
+  if (name === "Race") return { bg: "bg-accent/12", text: "text-accent", border: "border-accent/20" };
+  if (name.includes("Sprint")) return { bg: "bg-warning/12", text: "text-warning", border: "border-warning/20" };
+  if (name === "Qualifying") return { bg: "bg-highlight/12", text: "text-highlight", border: "border-highlight/20" };
+  return { bg: "bg-highlight/8", text: "text-highlight/70", border: "border-highlight/12" };
 }
 
 // Short session labels for the compact header strip
@@ -129,9 +129,14 @@ export function Header({ activeTab, timezone }: HeaderProps) {
             <span className="text-[12px] font-semibold text-text truncate min-w-0">
               {sessionInfo.raceName}
             </span>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ml-auto shrink-0 ${getSessionBadge(sessionInfo.session.name)}`}>
-              {getShortSession(sessionInfo.session.name)}
-            </span>
+            {(() => {
+              const badge = getSessionBadge(sessionInfo.session.name);
+              return (
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ml-auto shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}>
+                  {getShortSession(sessionInfo.session.name)}
+                </span>
+              );
+            })()}
           </div>
         </>
       )}
@@ -140,19 +145,26 @@ export function Header({ activeTab, timezone }: HeaderProps) {
       {sessionInfo && !sessionInfo.live && hasCountdown && (
         <>
           <div className="h-px bg-linear-to-r from-transparent via-highlight/30 to-transparent" />
-          <div className="flex items-center gap-2 px-4 py-1.5 bg-highlight/5">
+          <div className="flex items-center justify-center gap-2 px-4 py-1.5 bg-highlight/5">
             <img
               src={getFlagUrl(sessionInfo.countryCode)}
               alt=""
               className="w-5 h-3.5 rounded-sm object-cover shrink-0 shadow-sm"
             />
-            <span className="text-[12px] font-semibold text-text truncate min-w-0">
+            <span className="text-[12px] font-semibold text-text shrink-0">
               {sessionInfo.raceName}
             </span>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border shrink-0 ${getSessionBadge(sessionInfo.session.name)}`}>
-              {getShortSession(sessionInfo.session.name)}
-            </span>
-            <div className="flex items-center gap-0.5 ml-auto shrink-0">
+            <span className="text-text-muted/40 shrink-0">·</span>
+            {(() => {
+              const badge = getSessionBadge(sessionInfo.session.name);
+              return (
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0 ${badge.bg} ${badge.text} border ${badge.border}`}>
+                  {getShortSession(sessionInfo.session.name)}
+                </span>
+              );
+            })()}
+            <span className="text-text-muted/40 shrink-0">·</span>
+            <div className="flex items-center gap-0.5 shrink-0">
               {[
                 ...(countdown!.days > 0 ? [{ val: countdown!.days, label: "d", pad: false }] : []),
                 { val: countdown!.hours, label: "h", pad: true },
@@ -160,7 +172,7 @@ export function Header({ activeTab, timezone }: HeaderProps) {
                 { val: countdown!.seconds, label: "s", pad: true },
               ].map((unit) => (
                 <div key={unit.label} className="flex items-center">
-                  <span className="font-display text-[12px] font-bold text-highlight bg-highlight/10 rounded px-0.5 py-0.5 tabular-nums leading-none border border-highlight/15">
+                  <span className="font-display text-[12px] font-bold text-highlight tabular-nums leading-none">
                     <FlipDigit value={unit.pad ? String(unit.val).padStart(2, "0") : String(unit.val)} />
                   </span>
                   <span className="text-[9px] text-text-muted font-semibold uppercase ml-0.5 mr-0.5">{unit.label}</span>
