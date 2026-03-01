@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Youtube, Bookmark, Newspaper, MessageCircle, Calendar } from "lucide-react";
@@ -65,27 +66,30 @@ export function NewsPage() {
 
   return (
     <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
-      {/* Toast */}
-      <div
-        className={`fixed top-40 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
-          toastVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
-        }`}
-      >
-        <div className={`rounded-lg px-4 py-2 flex items-center gap-2 shadow-lg backdrop-blur-md ${
-          toastType === "success"
-            ? "bg-surface/90 text-success border border-success/30"
-            : "bg-surface/90 text-live border border-live/30"
-        }`}>
-          {toastType === "success" ? (
-            <Check size={14} strokeWidth={3} />
-          ) : (
-            <AlertCircle size={14} />
-          )}
-          <span className="text-xs font-bold tracking-wide">
-            {toastType === "success" ? "News updated" : "Refresh failed"}
-          </span>
-        </div>
-      </div>
+      {/* Toast — portaled to body to escape motion.div transform */}
+      {createPortal(
+        <div
+          className={`fixed top-40 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
+            toastVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
+          }`}
+        >
+          <div className={`rounded-lg px-4 py-2 flex items-center gap-2 shadow-lg backdrop-blur-md ${
+            toastType === "success"
+              ? "bg-surface/90 text-success border border-success/30"
+              : "bg-surface/90 text-live border border-live/30"
+          }`}>
+            {toastType === "success" ? (
+              <Check size={14} strokeWidth={3} />
+            ) : (
+              <AlertCircle size={14} />
+            )}
+            <span className="text-xs font-bold tracking-wide">
+              {toastType === "success" ? "News updated" : "Refresh failed"}
+            </span>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Quick Links */}
       <div className="space-y-2">

@@ -32,6 +32,15 @@ function getSessionBadge(name: string) {
   return "bg-highlight/10 text-highlight/70 border-highlight/15";
 }
 
+// Short session labels for the compact header strip
+function getShortSession(name: string) {
+  const map: Record<string, string> = {
+    "Practice 1": "FP1", "Practice 2": "FP2", "Practice 3": "FP3",
+    "Sprint Qualifying": "SQ", "Qualifying": "QUALI",
+  };
+  return map[name] ?? name;
+}
+
 interface HeaderProps {
   activeTab: TabId;
   timezone: string;
@@ -106,24 +115,22 @@ export function Header({ activeTab, timezone }: HeaderProps) {
       {sessionInfo?.live && (
         <>
           <div className="h-px bg-linear-to-r from-transparent via-live/40 to-transparent" />
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 bg-live/10">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-live live-dot" />
-                <span className="text-[11px] font-bold uppercase tracking-widest text-live">LIVE</span>
-              </span>
-              <span className="text-border-light">|</span>
-              <img
-                src={getFlagUrl(sessionInfo.countryCode)}
-                alt=""
-                className="w-6 h-4 rounded-sm object-cover shrink-0 shadow-sm"
-              />
-              <span className="text-[12px] font-semibold text-text">
-                {sessionInfo.raceName}
-              </span>
-            </div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ml-auto ${getSessionBadge(sessionInfo.session.name)}`}>
-              {sessionInfo.session.name}
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-live/10">
+            <span className="flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-live live-dot" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-live">LIVE</span>
+            </span>
+            <span className="text-border-light shrink-0">|</span>
+            <img
+              src={getFlagUrl(sessionInfo.countryCode)}
+              alt=""
+              className="w-5 h-3.5 rounded-sm object-cover shrink-0 shadow-sm"
+            />
+            <span className="text-[12px] font-semibold text-text truncate min-w-0">
+              {sessionInfo.raceName}
+            </span>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ml-auto shrink-0 ${getSessionBadge(sessionInfo.session.name)}`}>
+              {getShortSession(sessionInfo.session.name)}
             </span>
           </div>
         </>
@@ -133,21 +140,19 @@ export function Header({ activeTab, timezone }: HeaderProps) {
       {sessionInfo && !sessionInfo.live && hasCountdown && (
         <>
           <div className="h-px bg-linear-to-r from-transparent via-highlight/30 to-transparent" />
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 bg-highlight/5">
-            <div className="flex items-center gap-2">
-              <img
-                src={getFlagUrl(sessionInfo.countryCode)}
-                alt=""
-                className="w-6 h-4 rounded-sm object-cover shrink-0 shadow-sm"
-              />
-              <span className="text-[12px] font-semibold text-text">
-                {sessionInfo.raceName}
-              </span>
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${getSessionBadge(sessionInfo.session.name)}`}>
-                {sessionInfo.session.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-highlight/5">
+            <img
+              src={getFlagUrl(sessionInfo.countryCode)}
+              alt=""
+              className="w-5 h-3.5 rounded-sm object-cover shrink-0 shadow-sm"
+            />
+            <span className="text-[12px] font-semibold text-text truncate min-w-0">
+              {sessionInfo.raceName}
+            </span>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border shrink-0 ${getSessionBadge(sessionInfo.session.name)}`}>
+              {getShortSession(sessionInfo.session.name)}
+            </span>
+            <div className="flex items-center gap-0.5 ml-auto shrink-0">
               {[
                 ...(countdown!.days > 0 ? [{ val: countdown!.days, label: "d", pad: false }] : []),
                 { val: countdown!.hours, label: "h", pad: true },
@@ -155,10 +160,10 @@ export function Header({ activeTab, timezone }: HeaderProps) {
                 { val: countdown!.seconds, label: "s", pad: true },
               ].map((unit) => (
                 <div key={unit.label} className="flex items-center">
-                  <span className="font-display text-[13px] font-bold text-highlight bg-highlight/10 rounded px-1 py-0.5 tabular-nums leading-none border border-highlight/15">
+                  <span className="font-display text-[12px] font-bold text-highlight bg-highlight/10 rounded px-0.5 py-0.5 tabular-nums leading-none border border-highlight/15">
                     <FlipDigit value={unit.pad ? String(unit.val).padStart(2, "0") : String(unit.val)} />
                   </span>
-                  <span className="text-[9px] text-text-muted font-semibold uppercase ml-0.5 mr-1">{unit.label}</span>
+                  <span className="text-[9px] text-text-muted font-semibold uppercase ml-0.5 mr-0.5">{unit.label}</span>
                 </div>
               ))}
             </div>
