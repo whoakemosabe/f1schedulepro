@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { getTeamColor } from "../utils/teams";
+import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
-import { Trophy, Users, RefreshCw, AlertCircle, Info } from "lucide-react";
+import { Trophy, Users, RefreshCw, AlertCircle, Info, ExternalLink } from "lucide-react";
 
 interface Driver {
   position: number;
@@ -108,7 +108,7 @@ export function StandingsPage() {
             className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-semibold uppercase tracking-wider transition-colors duration-200 ${
               view === v
                 ? "text-white"
-                : "text-text-muted hover:text-text-secondary"
+                : "text-text-muted active:text-text-secondary"
             }`}
           >
             {v === "drivers" ? <Trophy size={14} /> : <Users size={14} />}
@@ -151,7 +151,7 @@ export function StandingsPage() {
                 return (
                   <div
                     key={d.driver.surname}
-                    className="stagger-item glass-light rounded-xl px-3 py-2.5 flex items-center gap-3 border-l-[3px] card-hover"
+                    className="stagger-item glass-light rounded-xl px-3 py-2.5 flex items-center gap-3 border-l-4 card-hover"
                     style={{
                       borderLeftColor: color,
                       animationDelay: `${Math.min(i * 15, 200)}ms`,
@@ -162,10 +162,22 @@ export function StandingsPage() {
                     </span>
                     <img src={getFlagUrl(cc)} alt="" className="w-6 h-4 rounded-sm object-cover shrink-0" loading="lazy" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-text truncate">
+                      <a
+                        href={`https://www.formula1.com/en/drivers/${d.driver.name}-${d.driver.surname}`.toLowerCase().replace(/\s+/g, "-")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold text-text truncate inline-flex items-center gap-1 active:opacity-70 transition-opacity duration-100"
+                      >
                         {d.driver.name} <span className="text-text-secondary font-normal">{d.driver.surname}</span>
-                      </p>
-                      <p className="text-[11px] font-medium uppercase tracking-wider truncate" style={{ color }}>{d.team?.teamName}</p>
+                        <ExternalLink size={10} className="text-text-muted shrink-0" />
+                      </a>
+                      <a
+                        href={getTeamUrl(d.team?.teamId ?? "") ?? "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-medium uppercase tracking-wider truncate flex items-center gap-1 active:opacity-70 transition-opacity duration-100"
+                        style={{ color }}
+                      >{d.team?.teamName} <ExternalLink size={8} className="text-text-muted shrink-0" /></a>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="font-display text-sm font-bold text-text tabular-nums">{d.points}</span>
@@ -188,13 +200,19 @@ export function StandingsPage() {
                 return (
                   <div
                     key={id}
-                    className="stagger-item glass-light rounded-xl overflow-hidden border-l-[3px]"
+                    className="stagger-item glass-light rounded-xl overflow-hidden border-l-4"
                     style={{ borderLeftColor: team.color, animationDelay: `${idx * 30}ms` }}
                   >
                     <div className="px-3.5 py-2.5 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <span className="font-display text-[15px] font-bold text-text-muted tabular-nums">{idx + 1}</span>
-                        <span className="text-sm font-bold uppercase tracking-wide" style={{ color: team.color }}>{team.name}</span>
+                        <a
+                          href={getTeamUrl(id) ?? "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-bold uppercase tracking-wide inline-flex items-center gap-1 active:opacity-70 transition-opacity duration-100"
+                          style={{ color: team.color }}
+                        >{team.name} <ExternalLink size={10} className="text-text-muted shrink-0" /></a>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-display text-sm font-bold text-text tabular-nums">{team.points}</span>
@@ -205,7 +223,12 @@ export function StandingsPage() {
                     <div className="border-t border-glass-border divide-y divide-glass-border">
                       {team.drivers.map((d) => (
                         <div key={d.driver.surname} className="px-3.5 py-1.5 flex items-center justify-between text-[13px]">
-                          <span className="text-text-secondary">{d.driver.name} {d.driver.surname}</span>
+                          <a
+                            href={`https://www.formula1.com/en/drivers/${d.driver.name}-${d.driver.surname}`.toLowerCase().replace(/\s+/g, "-")}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-text-secondary inline-flex items-center gap-1 active:opacity-70 transition-opacity duration-100"
+                          >{d.driver.name} {d.driver.surname} <ExternalLink size={9} className="text-text-muted shrink-0" /></a>
                           <span className="font-semibold text-text tabular-nums">{d.points}</span>
                         </div>
                       ))}

@@ -48,7 +48,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   }, [activeTab, ready]);
 
   return (
-    <nav className="glass safe-bottom fixed bottom-0 left-0 right-0 z-50 border-x-0 border-b-0">
+    <nav className="glass safe-bottom fixed bottom-0 left-0 right-0 z-50 border-x-0! border-b-0!">
       {/* Top accent line */}
       <div className="h-px bg-linear-to-r from-transparent via-accent/50 to-transparent" />
       <div ref={navRef} className="relative flex items-stretch max-w-lg mx-auto">

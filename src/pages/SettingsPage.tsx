@@ -42,7 +42,7 @@ export function SettingsPage({ timezone, setTimezone }: Props) {
           <div ref={dropRef} className="relative">
             <button
               onClick={() => setOpen(!open)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-light border border-border hover:border-border-light transition-colors duration-150"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-light border border-border transition-colors duration-150"
             >
               <span className="text-sm font-semibold text-text">{current?.label ?? timezone}</span>
               <span className="text-[11px] text-accent font-mono">{abbr}</span>
@@ -65,7 +65,7 @@ export function SettingsPage({ timezone, setTimezone }: Props) {
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left transition-colors duration-100 ${
                         isActive
                           ? "bg-accent/10 text-accent"
-                          : "text-text hover:bg-surface-light"
+                          : "text-text active:bg-surface-light"
                       }`}
                     >
                       <div>

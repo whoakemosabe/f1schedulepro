@@ -17,7 +17,8 @@ const schedule2026: Race[] = [
     round: 1,
     type: "conventional",
     name: "Australian Grand Prix",
-    officialName: "FORMULA 1 AUSTRALIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 QATAR AIRWAYS AUSTRALIAN GRAND PRIX 2026",
+    f1ResultsId: 1279, f1ResultsSlug: "australia",
     circuit: { id: "albert_park", name: "Albert Park Grand Prix Circuit", location: "Melbourne", country: "Australia", countryCode: "au" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-03-06T01:30:00Z" },
@@ -31,7 +32,8 @@ const schedule2026: Race[] = [
     round: 2,
     type: "sprint",
     name: "Chinese Grand Prix",
-    officialName: "FORMULA 1 CHINESE GRAND PRIX 2026",
+    officialName: "FORMULA 1 HEINEKEN CHINESE GRAND PRIX 2026",
+    f1ResultsId: 1280, f1ResultsSlug: "china",
     circuit: { id: "shanghai", name: "Shanghai International Circuit", location: "Shanghai", country: "China", countryCode: "cn" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-03-13T03:30:00Z" },
@@ -45,7 +47,8 @@ const schedule2026: Race[] = [
     round: 3,
     type: "conventional",
     name: "Japanese Grand Prix",
-    officialName: "FORMULA 1 JAPANESE GRAND PRIX 2026",
+    officialName: "FORMULA 1 ARAMCO JAPANESE GRAND PRIX 2026",
+    f1ResultsId: 1281, f1ResultsSlug: "japan",
     circuit: { id: "suzuka", name: "Suzuka Circuit", location: "Suzuka", country: "Japan", countryCode: "jp" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-03-27T02:30:00Z" },
@@ -59,7 +62,8 @@ const schedule2026: Race[] = [
     round: 4,
     type: "conventional",
     name: "Bahrain Grand Prix",
-    officialName: "FORMULA 1 BAHRAIN GRAND PRIX 2026",
+    officialName: "FORMULA 1 GULF AIR BAHRAIN GRAND PRIX 2026",
+    f1ResultsId: 1282, f1ResultsSlug: "bahrain",
     circuit: { id: "bahrain", name: "Bahrain International Circuit", location: "Sakhir", country: "Bahrain", countryCode: "bh" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-04-10T11:30:00Z" },
@@ -73,7 +77,8 @@ const schedule2026: Race[] = [
     round: 5,
     type: "conventional",
     name: "Saudi Arabian Grand Prix",
-    officialName: "FORMULA 1 SAUDI ARABIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 STC SAUDI ARABIAN GRAND PRIX 2026",
+    f1ResultsId: 1283, f1ResultsSlug: "saudi-arabia",
     circuit: { id: "jeddah", name: "Jeddah Corniche Circuit", location: "Jeddah", country: "Saudi Arabia", countryCode: "sa" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-04-17T13:30:00Z" },
@@ -87,7 +92,8 @@ const schedule2026: Race[] = [
     round: 6,
     type: "sprint",
     name: "Miami Grand Prix",
-    officialName: "FORMULA 1 MIAMI GRAND PRIX 2026",
+    officialName: "FORMULA 1 CRYPTO.COM MIAMI GRAND PRIX 2026",
+    f1ResultsId: 1284, f1ResultsSlug: "miami",
     circuit: { id: "miami", name: "Miami International Autodrome", location: "Miami", country: "United States", countryCode: "us" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-05-01T16:30:00Z" },
@@ -101,7 +107,8 @@ const schedule2026: Race[] = [
     round: 7,
     type: "sprint",
     name: "Canadian Grand Prix",
-    officialName: "FORMULA 1 CANADIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 LENOVO GRAND PRIX DU CANADA 2026",
+    f1ResultsId: 1285, f1ResultsSlug: "canada",
     circuit: { id: "villeneuve", name: "Circuit Gilles Villeneuve", location: "Montréal", country: "Canada", countryCode: "ca" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-05-22T16:30:00Z" },
@@ -115,7 +122,8 @@ const schedule2026: Race[] = [
     round: 8,
     type: "conventional",
     name: "Monaco Grand Prix",
-    officialName: "FORMULA 1 GRAND PRIX DE MONACO 2026",
+    officialName: "FORMULA 1 LOUIS VUITTON GRAND PRIX DE MONACO 2026",
+    f1ResultsId: 1286, f1ResultsSlug: "monaco",
     circuit: { id: "monaco", name: "Circuit de Monaco", location: "Monte Carlo", country: "Monaco", countryCode: "mc" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-06-05T11:30:00Z" },
@@ -129,7 +137,8 @@ const schedule2026: Race[] = [
     round: 9,
     type: "conventional",
     name: "Barcelona Grand Prix",
-    officialName: "FORMULA 1 BARCELONA GRAND PRIX 2026",
+    officialName: "FORMULA 1 MSC CRUISES GRAN PREMIO DE BARCELONA-CATALUNYA 2026",
+    f1ResultsId: 1287, f1ResultsSlug: "barcelona-catalunya",
     circuit: { id: "catalunya", name: "Circuit de Barcelona-Catalunya", location: "Barcelona", country: "Spain", countryCode: "es" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-06-12T11:30:00Z" },
@@ -143,7 +152,8 @@ const schedule2026: Race[] = [
     round: 10,
     type: "conventional",
     name: "Austrian Grand Prix",
-    officialName: "FORMULA 1 AUSTRIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 LENOVO AUSTRIAN GRAND PRIX 2026",
+    f1ResultsId: 1288, f1ResultsSlug: "austria",
     circuit: { id: "red_bull_ring", name: "Red Bull Ring", location: "Spielberg", country: "Austria", countryCode: "at" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-06-26T11:30:00Z" },
@@ -157,7 +167,8 @@ const schedule2026: Race[] = [
     round: 11,
     type: "sprint",
     name: "British Grand Prix",
-    officialName: "FORMULA 1 BRITISH GRAND PRIX 2026",
+    officialName: "FORMULA 1 PIRELLI BRITISH GRAND PRIX 2026",
+    f1ResultsId: 1289, f1ResultsSlug: "great-britain",
     circuit: { id: "silverstone", name: "Silverstone Circuit", location: "Silverstone", country: "United Kingdom", countryCode: "gb" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-07-03T11:30:00Z" },
@@ -171,7 +182,8 @@ const schedule2026: Race[] = [
     round: 12,
     type: "conventional",
     name: "Belgian Grand Prix",
-    officialName: "FORMULA 1 BELGIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 MOËT & CHANDON BELGIAN GRAND PRIX 2026",
+    f1ResultsId: 1290, f1ResultsSlug: "belgium",
     circuit: { id: "spa", name: "Circuit de Spa-Francorchamps", location: "Spa", country: "Belgium", countryCode: "be" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-07-17T11:30:00Z" },
@@ -185,7 +197,8 @@ const schedule2026: Race[] = [
     round: 13,
     type: "conventional",
     name: "Hungarian Grand Prix",
-    officialName: "FORMULA 1 HUNGARIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 AWS HUNGARIAN GRAND PRIX 2026",
+    f1ResultsId: 1291, f1ResultsSlug: "hungary",
     circuit: { id: "hungaroring", name: "Hungaroring", location: "Budapest", country: "Hungary", countryCode: "hu" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-07-24T11:30:00Z" },
@@ -199,7 +212,8 @@ const schedule2026: Race[] = [
     round: 14,
     type: "sprint",
     name: "Dutch Grand Prix",
-    officialName: "FORMULA 1 DUTCH GRAND PRIX 2026",
+    officialName: "FORMULA 1 HEINEKEN DUTCH GRAND PRIX 2026",
+    f1ResultsId: 1292, f1ResultsSlug: "netherlands",
     circuit: { id: "zandvoort", name: "Circuit Park Zandvoort", location: "Zandvoort", country: "Netherlands", countryCode: "nl" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-08-21T10:30:00Z" },
@@ -213,7 +227,8 @@ const schedule2026: Race[] = [
     round: 15,
     type: "conventional",
     name: "Italian Grand Prix",
-    officialName: "FORMULA 1 ITALIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 PIRELLI GRAN PREMIO D'ITALIA 2026",
+    f1ResultsId: 1293, f1ResultsSlug: "italy",
     circuit: { id: "monza", name: "Autodromo Nazionale di Monza", location: "Monza", country: "Italy", countryCode: "it" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-09-04T10:30:00Z" },
@@ -227,7 +242,8 @@ const schedule2026: Race[] = [
     round: 16,
     type: "conventional",
     name: "Spanish Grand Prix",
-    officialName: "FORMULA 1 SPANISH GRAND PRIX 2026",
+    officialName: "FORMULA 1 TAG HEUER GRAN PREMIO DE ESPAÑA 2026",
+    f1ResultsId: 1294, f1ResultsSlug: "spain",
     circuit: { id: "madring", name: "Madrid Street Circuit", location: "Madrid", country: "Spain", countryCode: "es" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-09-11T11:30:00Z" },
@@ -241,7 +257,8 @@ const schedule2026: Race[] = [
     round: 17,
     type: "conventional",
     name: "Azerbaijan Grand Prix",
-    officialName: "FORMULA 1 AZERBAIJAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 QATAR AIRWAYS AZERBAIJAN GRAND PRIX 2026",
+    f1ResultsId: 1295, f1ResultsSlug: "azerbaijan",
     circuit: { id: "baku", name: "Baku City Circuit", location: "Baku", country: "Azerbaijan", countryCode: "az" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-09-24T08:30:00Z" },
@@ -255,7 +272,8 @@ const schedule2026: Race[] = [
     round: 18,
     type: "sprint",
     name: "Singapore Grand Prix",
-    officialName: "FORMULA 1 SINGAPORE GRAND PRIX 2026",
+    officialName: "FORMULA 1 SINGAPORE AIRLINES SINGAPORE GRAND PRIX 2026",
+    f1ResultsId: 1296, f1ResultsSlug: "singapore",
     circuit: { id: "marina_bay", name: "Marina Bay Street Circuit", location: "Marina Bay", country: "Singapore", countryCode: "sg" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-10-09T08:30:00Z" },
@@ -269,7 +287,8 @@ const schedule2026: Race[] = [
     round: 19,
     type: "conventional",
     name: "United States Grand Prix",
-    officialName: "FORMULA 1 UNITED STATES GRAND PRIX 2026",
+    officialName: "FORMULA 1 MSC CRUISES UNITED STATES GRAND PRIX 2026",
+    f1ResultsId: 1297, f1ResultsSlug: "united-states",
     circuit: { id: "americas", name: "Circuit of the Americas", location: "Austin", country: "United States", countryCode: "us" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-10-23T17:30:00Z" },
@@ -283,7 +302,8 @@ const schedule2026: Race[] = [
     round: 20,
     type: "conventional",
     name: "Mexico City Grand Prix",
-    officialName: "FORMULA 1 MEXICO CITY GRAND PRIX 2026",
+    officialName: "FORMULA 1 GRAN PREMIO DE LA CIUDAD DE MÉXICO 2026",
+    f1ResultsId: 1298, f1ResultsSlug: "mexico",
     circuit: { id: "rodriguez", name: "Autódromo Hermanos Rodríguez", location: "Mexico City", country: "Mexico", countryCode: "mx" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-10-30T18:30:00Z" },
@@ -297,7 +317,8 @@ const schedule2026: Race[] = [
     round: 21,
     type: "conventional",
     name: "Brazilian Grand Prix",
-    officialName: "FORMULA 1 BRAZILIAN GRAND PRIX 2026",
+    officialName: "FORMULA 1 MSC CRUISES GRANDE PRÊMIO DE SÃO PAULO 2026",
+    f1ResultsId: 1299, f1ResultsSlug: "brazil",
     circuit: { id: "interlagos", name: "Autódromo José Carlos Pace", location: "São Paulo", country: "Brazil", countryCode: "br" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-11-06T15:30:00Z" },
@@ -311,7 +332,8 @@ const schedule2026: Race[] = [
     round: 22,
     type: "conventional",
     name: "Las Vegas Grand Prix",
-    officialName: "FORMULA 1 LAS VEGAS GRAND PRIX 2026",
+    officialName: "FORMULA 1 HEINEKEN LAS VEGAS GRAND PRIX 2026",
+    f1ResultsId: 1300, f1ResultsSlug: "las-vegas",
     circuit: { id: "vegas", name: "Las Vegas Strip Street Circuit", location: "Las Vegas", country: "United States", countryCode: "us" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-11-20T00:30:00Z" },
@@ -325,7 +347,8 @@ const schedule2026: Race[] = [
     round: 23,
     type: "conventional",
     name: "Qatar Grand Prix",
-    officialName: "FORMULA 1 QATAR GRAND PRIX 2026",
+    officialName: "FORMULA 1 QATAR AIRWAYS QATAR GRAND PRIX 2026",
+    f1ResultsId: 1301, f1ResultsSlug: "qatar",
     circuit: { id: "losail", name: "Losail International Circuit", location: "Lusail", country: "Qatar", countryCode: "qa" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-11-27T13:30:00Z" },
@@ -339,7 +362,8 @@ const schedule2026: Race[] = [
     round: 24,
     type: "conventional",
     name: "Abu Dhabi Grand Prix",
-    officialName: "FORMULA 1 ABU DHABI GRAND PRIX 2026",
+    officialName: "FORMULA 1 ETIHAD AIRWAYS ABU DHABI GRAND PRIX 2026",
+    f1ResultsId: 1302, f1ResultsSlug: "abu-dhabi",
     circuit: { id: "yas_marina", name: "Yas Marina Circuit", location: "Abu Dhabi", country: "United Arab Emirates", countryCode: "ae" },
     sessions: [
       { name: "Practice 1", dateUtc: "2026-12-04T09:30:00Z" },

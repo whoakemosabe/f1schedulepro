@@ -34,8 +34,8 @@ export default function App() {
 
   return (
     <div className="min-h-svh bg-bg text-text">
-      <Header activeTab={activeTab} />
-      <main className="pt-14 pb-20">
+      <Header activeTab={activeTab} timezone={timezone} />
+      <main className="pt-24 pb-20">
         <div key={activeTab} className="page-enter">
           {renderPage()}
         </div>

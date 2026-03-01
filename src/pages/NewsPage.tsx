@@ -1,11 +1,58 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RefreshCw, ExternalLink, AlertCircle, Calendar, Check } from "lucide-react";
+import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Globe, Youtube, Bookmark, Newspaper, MessageCircle, Calendar } from "lucide-react";
 
 interface NewsItem {
   title: string;
   link: string;
   pubDate: string;
   description: string;
+  source: string;
+}
+
+const RSS_SOURCES = [
+  { name: "RACER", url: "https://racer.com/f1/feed/", color: "text-highlight/60" },
+  { name: "Autosport", url: "https://www.autosport.com/rss/feed/f1", color: "text-warning/60" },
+  { name: "Motorsport", url: "https://www.motorsport.com/rss/f1/news/", color: "text-success/60" },
+  { name: "The Race", url: "https://the-race.com/feed/", color: "text-accent/60" },
+];
+
+const SOURCE_COLORS: Record<string, string> = Object.fromEntries(
+  RSS_SOURCES.map((s) => [s.name, s.color])
+);
+
+const QUICK_LINKS = [
+  { label: "F1 TV", url: "https://f1tv.formula1.com", icon: Tv, color: "text-highlight" },
+  { label: "F1 YouTube", url: "https://www.youtube.com/F1", icon: Youtube, color: "text-live" },
+  { label: "Motorsport.com", url: "https://www.motorsport.com/f1/", icon: Newspaper, color: "text-accent" },
+  { label: "r/formula1", url: "https://www.reddit.com/r/formula1/", icon: MessageCircle, color: "text-warning" },
+  { label: "F1 Calendar", url: "https://f1calendar.com", icon: Calendar, color: "text-success" },
+  { label: "FIA Regulations", url: "https://www.fia.com/regulation/category/110", icon: Bookmark, color: "text-text-muted" },
+];
+
+function timeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+async function fetchFeed(source: { name: string; url: string }): Promise<NewsItem[]> {
+  try {
+    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`);
+    const data = await res.json();
+    if (data.status !== "ok") return [];
+    return (data.items ?? []).map((item: { title: string; link: string; pubDate: string; description: string }) => ({
+      ...item,
+      source: source.name,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export function NewsPage() {
@@ -30,10 +77,19 @@ export function NewsPage() {
     setError(null);
     const start = Date.now();
     try {
-      const res = await fetch("https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fracer.com%2Ff1%2Ffeed%2F");
-      const data = await res.json();
-      if (data.status !== "ok") throw new Error(data.message ?? "Feed error");
-      setNews(data.items ?? []);
+      const results = await Promise.all(RSS_SOURCES.map(fetchFeed));
+      const all = results.flat();
+      if (all.length === 0) throw new Error("No articles loaded");
+      // Dedupe by title (some outlets syndicate the same story)
+      const seen = new Set<string>();
+      const unique = all.filter((item) => {
+        const key = item.title.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      unique.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+      setNews(unique);
       if (isRefresh) {
         const elapsed = Date.now() - start;
         const delay = Math.max(0, 500 - elapsed);
@@ -61,10 +117,10 @@ export function NewsPage() {
   }
 
   return (
-    <div className="px-3 pt-3 pb-2 space-y-2 max-w-2xl mx-auto">
+    <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
       {/* Toast */}
       <div
-        className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
+        className={`fixed top-40 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
           toastVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
         }`}
       >
@@ -84,18 +140,50 @@ export function NewsPage() {
         </div>
       </div>
 
+      {/* Quick Links */}
+      <div className="space-y-2">
+        <h3 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase px-1">
+          Quick Links
+        </h3>
+        <div className="grid grid-cols-3 gap-2">
+          {QUICK_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <a
+                key={link.label}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass-light rounded-xl px-3 py-2.5 flex items-center gap-2.5 card-hover active:border-accent/30 border border-transparent"
+              >
+                <Icon size={16} className={`${link.color} shrink-0`} />
+                <div>
+                  <span className="text-[13px] font-medium text-text">{link.label}</span>
+                  <ExternalLink size={9} className="text-text-muted/40 inline ml-1" />
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Section header */}
       <div className="flex items-center justify-between px-1">
-        <h2 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
-          Latest News
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
+            Latest News
+          </h2>
+          {!loading && !error && news.length > 0 && (
+            <span className="text-[10px] text-text-muted/60 tabular-nums">{news.length} articles</span>
+          )}
+        </div>
         <button
           onClick={() => fetchNews(true)}
           disabled={refreshing}
           className={`p-2 rounded-lg transition-all duration-150 disabled:opacity-40 ${
             refreshing
               ? "text-accent bg-accent/10"
-              : "text-text-muted hover:text-accent hover:bg-surface-light"
+              : "text-text-muted active:text-accent active:bg-surface-light"
           }`}
         >
           <RefreshCw size={16} className={`transition-transform duration-300 ${refreshing ? "animate-spin" : ""}`} />
@@ -127,25 +215,38 @@ export function NewsPage() {
       {!loading && !error && news.map((item, i) => {
         const date = new Date(item.pubDate);
         const excerpt = stripHtml(item.description).slice(0, 140);
+        const isFeatured = i === 0;
+        const sourceColor = SOURCE_COLORS[item.source] ?? "text-text-muted";
 
         return (
           <a
-            key={i}
+            key={`${item.source}-${i}`}
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="stagger-item glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] border-l-highlight/30 hover:border-l-accent group"
+            className={`stagger-item glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] group ${
+              isFeatured
+                ? "border-l-accent bg-accent/5"
+                : "border-l-highlight/30 active:border-l-accent"
+            }`}
             style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
           >
-            <h3 className="text-sm font-semibold text-text leading-snug group-hover:text-accent transition-colors duration-100 line-clamp-2">
+            {isFeatured && (
+              <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-0.5">
+                Latest
+              </span>
+            )}
+            <h3 className={`font-semibold text-text leading-snug group-active:text-accent transition-colors duration-100 line-clamp-2 ${
+              isFeatured ? "text-[15px]" : "text-sm"
+            }`}>
               {item.title}
             </h3>
 
             <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
-              <Calendar size={12} />
-              {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              {" · "}
-              {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+              <Clock size={11} />
+              <span>{timeAgo(date)}</span>
+              <span className="text-border-light">·</span>
+              <span className={`font-semibold uppercase tracking-wider text-[10px] ${sourceColor}`}>{item.source}</span>
             </div>
 
             {excerpt && (

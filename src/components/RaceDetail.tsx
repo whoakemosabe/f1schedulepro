@@ -31,11 +31,46 @@ interface Props {
   globalNextSessionDate: string | null;
 }
 
+// Estimated session durations in minutes (for live detection)
+const SESSION_DURATION_MIN: Record<string, number> = {
+  "Practice 1": 60,
+  "Practice 2": 60,
+  "Practice 3": 60,
+  "Sprint Qualifying": 60,
+  "Sprint": 60,
+  "Qualifying": 60,
+  "Race": 150,
+};
+
+function getSessionColors(name: string) {
+  if (name === "Race") return { border: "border-live/25", text: "text-live", bg: "bg-live/8" };
+  if (name.includes("Sprint")) return { border: "border-warning/25", text: "text-warning", bg: "bg-warning/8" };
+  if (name === "Qualifying") return { border: "border-highlight/25", text: "text-highlight", bg: "bg-highlight/8" };
+  return { border: "border-highlight/20", text: "text-highlight", bg: "bg-highlight/5" };
+}
+
 const TRACK_TYPE_LABEL: Record<string, string> = {
   permanent: "Permanent",
   street: "Street Circuit",
   hybrid: "Hybrid",
 };
+
+const SESSION_URL_SUFFIX: Record<string, string> = {
+  "Practice 1": "practice/1",
+  "Practice 2": "practice/2",
+  "Practice 3": "practice/3",
+  "Sprint Qualifying": "sprint-qualifying",
+  "Sprint": "sprint-results",
+  "Qualifying": "qualifying",
+  "Race": "race-result",
+};
+
+function getResultsUrl(race: Race, sessionName: string): string | null {
+  if (!race.f1ResultsId || !race.f1ResultsSlug) return null;
+  const suffix = SESSION_URL_SUFFIX[sessionName];
+  if (!suffix) return null;
+  return `https://www.formula1.com/en/results/2026/races/${race.f1ResultsId}/${race.f1ResultsSlug}/${suffix}`;
+}
 
 export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
   const nextSession = getNextSession(race);
@@ -45,10 +80,18 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
   const tzAbbr = getTimezoneAbbr(timezone);
   const stats = getCircuitStats(race.circuit.id);
 
+  // Detect live session
+  const nowMs = Date.now();
+  const liveSession = race.sessions.find((s) => {
+    const startMs = new Date(s.dateUtc).getTime();
+    const durationMs = (SESSION_DURATION_MIN[s.name] ?? 90) * 60 * 1000;
+    return nowMs >= startMs && nowMs <= startMs + durationMs;
+  });
+
   return (
     <div className="px-3 py-4 space-y-2.5 max-w-2xl mx-auto">
       {/* Hero card */}
-      <div className="glass-light rounded-xl p-4 space-y-3 border-l-[3px] border-l-accent">
+      <div className={`glass-light rounded-xl p-4 space-y-3 border-l-[3px] ${isCompleted ? "border-l-success/50" : raceStatus === "active" ? "border-l-live" : "border-l-highlight"}`}>
         <div className="flex items-center gap-3">
           <img
             src={getFlagUrl(race.circuit.countryCode)}
@@ -100,31 +143,53 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
           </div>
         )}
 
-        {/* Countdown */}
-        {!isCompleted && countdown && nextSession && countdown.total > 0 && (
-          <div className="glass-light rounded-lg px-4 min-h-26 flex flex-col items-center justify-center text-center space-y-2 border border-accent/15">
-            <p className="text-[11px] text-text-muted uppercase tracking-[0.2em] font-medium">
-              {nextSession.name} starts in
-            </p>
-            <div className="flex justify-center gap-4">
-              {[
-                { val: countdown.days, label: "D" },
-                { val: countdown.hours, label: "H" },
-                { val: countdown.minutes, label: "M" },
-                { val: countdown.seconds, label: "S" },
-              ].map((unit) => (
-                <div key={unit.label} className="text-center">
-                  <div className="font-display text-2xl font-bold text-accent tabular-nums leading-none">
-                    <FlipDigit value={String(unit.val).padStart(2, "0")} />
-                  </div>
-                  <div className="text-[11px] text-text-muted tracking-widest mt-1 font-medium">
-                    {unit.label}
-                  </div>
-                </div>
-              ))}
+        {/* Live session */}
+        {!isCompleted && liveSession && (() => {
+          const colors = getSessionColors(liveSession.name);
+          return (
+            <div className={`glass-light rounded-lg px-4 min-h-26 flex flex-col items-center justify-center text-center space-y-2 border border-live/25 bg-live/8`}>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-live live-dot" />
+                <span className="text-[11px] font-bold uppercase tracking-widest text-live">LIVE</span>
+              </div>
+              <p className={`font-display text-sm font-bold tracking-wide ${colors.text}`}>
+                {liveSession.name}
+              </p>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* Countdown */}
+        {!isCompleted && !liveSession && countdown && nextSession && countdown.total > 0 && (() => {
+          const isNext = globalNextSessionDate && nextSession.dateUtc === globalNextSessionDate;
+          const colors = isNext
+            ? getSessionColors(nextSession.name)
+            : { border: "border-border-light", text: "text-text-muted", bg: "" };
+          return (
+            <div className={`glass-light rounded-lg px-4 min-h-26 flex flex-col items-center justify-center text-center space-y-2 border ${colors.border} ${colors.bg}`}>
+              <p className={`text-[11px] uppercase tracking-[0.2em] font-medium ${colors.text}`}>
+                {nextSession.name} starts in
+              </p>
+              <div className="flex justify-center gap-4">
+                {[
+                  { val: countdown.days, label: "D" },
+                  { val: countdown.hours, label: "H" },
+                  { val: countdown.minutes, label: "M" },
+                  { val: countdown.seconds, label: "S" },
+                ].map((unit) => (
+                  <div key={unit.label} className="text-center">
+                    <div className={`font-display text-2xl font-bold tabular-nums leading-none ${colors.text}`}>
+                      <FlipDigit value={String(unit.val).padStart(2, "0")} />
+                    </div>
+                    <div className="text-[11px] text-text-muted tracking-widest mt-1 font-medium">
+                      {unit.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Track stats — slim inline strip */}
         {stats && (
@@ -157,10 +222,19 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                   <Trophy size={11} className="text-warning" />
                   Lap record
                 </div>
-                <span>
+                <div className="flex items-center gap-2">
                   <span className="font-display font-bold text-accent tabular-nums">{stats.lapRecord.time}</span>
-                  <span className="text-text-muted ml-1.5">{stats.lapRecord.driver} ({stats.lapRecord.year})</span>
-                </span>
+                  <span className="text-text-muted/40">|</span>
+                  <a
+                    href={stats.lapRecord.driverUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-text-secondary active:text-accent transition-colors duration-100"
+                  >
+                    {stats.lapRecord.driver} <span className="text-text-muted">'{String(stats.lapRecord.year).slice(2)}</span>
+                    <ExternalLink size={9} className="text-text-muted/40 shrink-0" />
+                  </a>
+                </div>
               </div>
             )}
 
@@ -168,7 +242,7 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
               href={stats.wiki}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-highlight tracking-wide py-1 -mb-1 hover:text-accent transition-colors duration-150"
+              className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-highlight tracking-wide bg-surface-light border border-glass-border px-3 py-1.5 rounded-md active:scale-95 transition-all duration-100"
             >
               View on Wikipedia <ExternalLink size={11} />
             </a>
@@ -193,16 +267,10 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
             const isRace = session.name === "Race";
             const isSprint = session.name === "Sprint" || session.name === "Sprint Qualifying";
             const isQualifying = session.name === "Qualifying";
+            const resultsUrl = isPast ? getResultsUrl(race, session.name) : null;
 
-            return (
-              <div
-                key={i}
-                className={`
-                  flex items-center justify-between px-4 py-2.5 transition-colors duration-100
-                  ${isGlobalNext ? "bg-accent/8 border-l-[3px] border-l-accent" : "border-l-[3px] border-l-transparent"}
-                  ${isPast ? "opacity-40" : ""}
-                `}
-              >
+            const content = (
+              <>
                 <div className="flex items-center gap-2.5">
                   {isPast ? (
                     <Check size={14} className="text-success shrink-0" />
@@ -223,9 +291,12 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                     {session.name}
                   </span>
                   {isGlobalNext && (
-                    <span className="text-[11px] font-bold text-accent bg-accent/12 px-1.5 py-0.5 rounded tracking-widest uppercase border border-accent/15">
+                    <span className="text-[11px] font-bold text-highlight bg-highlight/12 px-1.5 py-0.5 rounded tracking-widest uppercase border border-highlight/15">
                       Next
                     </span>
+                  )}
+                  {resultsUrl && (
+                    <ExternalLink size={10} className="text-text-muted/50 shrink-0" />
                   )}
                 </div>
                 <div className="flex items-center gap-2 tabular-nums">
@@ -237,6 +308,29 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                     <Clock size={13} className="text-text-muted/30 shrink-0" />
                   )}
                 </div>
+              </>
+            );
+
+            const className = `
+              flex items-center justify-between px-4 py-2.5 transition-colors duration-100
+              ${isGlobalNext ? "bg-highlight/8 border-l-[3px] border-l-highlight" : "border-l-[3px] border-l-transparent"}
+              ${isPast ? "opacity-40" : ""}
+              ${resultsUrl ? "active:bg-surface-light" : ""}
+            `;
+
+            return resultsUrl ? (
+              <a
+                key={i}
+                href={resultsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={className}
+              >
+                {content}
+              </a>
+            ) : (
+              <div key={i} className={className}>
+                {content}
               </div>
             );
           })}

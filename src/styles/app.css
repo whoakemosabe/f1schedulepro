@@ -26,7 +26,7 @@
   --color-warning: #ffab00;
   --color-live: #e10600;
 
-  --color-glass: rgba(12, 15, 28, 0.55);
+  --color-glass: rgba(12, 15, 28, 0.35);
   --color-glass-light: rgba(18, 24, 48, 0.5);
   --color-glass-border: rgba(255, 255, 255, 0.08);
 }
@@ -37,9 +37,14 @@
   box-sizing: border-box;
 }
 
+button, [role="button"] {
+  cursor: pointer;
+}
+
 html {
   scroll-behavior: smooth;
   background: var(--color-bg);
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -147,19 +152,13 @@ body {
   background-clip: text;
 }
 
-/* ─── Card hover lift ─── */
+/* ─── Card press feedback ─── */
 .card-hover {
-  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1),
-              background-color 0.15s ease,
-              box-shadow 0.15s ease;
-}
-.card-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: transform 0.08s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.15s ease;
 }
 .card-hover:active {
-  transform: translateY(0) scale(0.985);
-  transition-duration: 0.08s;
+  transform: scale(0.985);
 }
 
 /* ─── Stagger children animation ─── */
@@ -174,22 +173,27 @@ body {
 
 /* ─── Flip clock digit ─── */
 .flip-digit {
-  display: inline-block;
-  position: relative;
-  overflow: hidden;
+  display: inline-flex;
   line-height: 1;
 }
-.flip-digit .flip-current {
+.digit-slot {
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.digit-slot .flip-current {
   display: block;
 }
-.flip-digit .flip-old {
+.digit-slot .flip-old {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   animation: flip-out 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-.flip-digit .flip-new {
+.digit-slot .flip-new {
   animation: flip-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 @keyframes flip-out {

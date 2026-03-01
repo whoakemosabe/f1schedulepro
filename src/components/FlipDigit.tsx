@@ -24,8 +24,12 @@ export function FlipDigit({ value, className = "" }: Props) {
 
   return (
     <span className={`flip-digit ${className}`}>
-      <span className={flipping ? "flip-old" : "flip-current"}>{display}</span>
-      {flipping && <span className="flip-new">{value}</span>}
+      {display.split("").map((char, i) => (
+        <span key={i} className="digit-slot">
+          <span className={flipping ? "flip-old" : "flip-current"}>{char}</span>
+          {flipping && <span className="flip-new">{value[i]}</span>}
+        </span>
+      ))}
     </span>
   );
 }

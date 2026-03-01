@@ -118,7 +118,7 @@ export function SchedulePage({ timezone }: Props) {
               setSelectedIndex(null);
               setSlideDir(null);
             }}
-            className="flex items-center gap-1 min-h-11 px-2 -ml-2 text-[13px] font-medium text-text-muted hover:text-accent transition-colors duration-100"
+            className="flex items-center gap-1 min-h-10 px-3 text-[13px] font-medium text-text-muted bg-surface-light/50 border border-glass-border rounded-xl active:text-accent active:scale-95 transition-all duration-100"
           >
             <ChevronLeft size={18} />
             Schedule
@@ -129,7 +129,7 @@ export function SchedulePage({ timezone }: Props) {
             <button
               onClick={goPrev}
               disabled={!hasPrev}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-light/50 border border-glass-border text-text-muted hover:text-accent hover:border-accent/30 active:scale-90 transition-all duration-150 disabled:opacity-20 disabled:hover:text-text-muted disabled:hover:border-glass-border"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-light/50 border border-glass-border text-text-muted active:text-accent active:scale-90 transition-all duration-150 disabled:opacity-20"
             >
               <ChevronLeft size={18} />
             </button>
@@ -141,7 +141,7 @@ export function SchedulePage({ timezone }: Props) {
             <button
               onClick={goNext}
               disabled={!hasNext}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-light/50 border border-glass-border text-text-muted hover:text-accent hover:border-accent/30 active:scale-90 transition-all duration-150 disabled:opacity-20 disabled:hover:text-text-muted disabled:hover:border-glass-border"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-light/50 border border-glass-border text-text-muted active:text-accent active:scale-90 transition-all duration-150 disabled:opacity-20"
             >
               <ChevronRight size={18} />
             </button>

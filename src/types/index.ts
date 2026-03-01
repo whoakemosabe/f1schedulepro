@@ -18,6 +18,8 @@ export interface Race {
   officialName: string;
   circuit: Circuit;
   sessions: Session[];
+  f1ResultsId?: number;
+  f1ResultsSlug?: string;
 }
 
 export type RaceStatus = "completed" | "active" | "upcoming";
