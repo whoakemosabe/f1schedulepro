@@ -1,24 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Globe, Youtube, Bookmark, Newspaper, MessageCircle, Calendar } from "lucide-react";
-
-interface NewsItem {
-  title: string;
-  link: string;
-  pubDate: string;
-  description: string;
-  source: string;
-}
-
-const RSS_SOURCES = [
-  { name: "RACER", url: "https://racer.com/f1/feed/", color: "text-highlight/60" },
-  { name: "Autosport", url: "https://www.autosport.com/rss/feed/f1", color: "text-warning/60" },
-  { name: "Motorsport", url: "https://www.motorsport.com/rss/f1/news/", color: "text-success/60" },
-  { name: "The Race", url: "https://the-race.com/feed/", color: "text-accent/60" },
-];
-
-const SOURCE_COLORS: Record<string, string> = Object.fromEntries(
-  RSS_SOURCES.map((s) => [s.name, s.color])
-);
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Youtube, Bookmark, Newspaper, MessageCircle, Calendar } from "lucide-react";
+import { fetchNews, SOURCE_COLORS } from "../api/fetchers";
 
 const QUICK_LINKS = [
   { label: "F1 TV", url: "https://f1tv.formula1.com", icon: Tv, color: "text-highlight" },
@@ -41,28 +25,25 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-async function fetchFeed(source: { name: string; url: string }): Promise<NewsItem[]> {
-  try {
-    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.url)}`);
-    const data = await res.json();
-    if (data.status !== "ok") return [];
-    return (data.items ?? []).map((item: { title: string; link: string; pubDate: string; description: string }) => ({
-      ...item,
-      source: source.name,
-    }));
-  } catch {
-    return [];
-  }
+function stripHtml(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent ?? tmp.innerText ?? "";
 }
 
 export function NewsPage() {
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: news = [], isLoading, error, isFetching } = useQuery({
+    queryKey: ["news"],
+    queryFn: fetchNews,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const [toastVisible, setToastVisible] = useState(false);
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const wasFetching = useRef(false);
+  const hasLoaded = useRef(false);
 
   const showToast = useCallback((type: "success" | "error") => {
     clearTimeout(toastTimer.current);
@@ -71,50 +52,16 @@ export function NewsPage() {
     toastTimer.current = setTimeout(() => setToastVisible(false), 2000);
   }, []);
 
-  const fetchNews = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const start = Date.now();
-    try {
-      const results = await Promise.all(RSS_SOURCES.map(fetchFeed));
-      const all = results.flat();
-      if (all.length === 0) throw new Error("No articles loaded");
-      // Dedupe by title (some outlets syndicate the same story)
-      const seen = new Set<string>();
-      const unique = all.filter((item) => {
-        const key = item.title.toLowerCase().trim();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      unique.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-      setNews(unique);
-      if (isRefresh) {
-        const elapsed = Date.now() - start;
-        const delay = Math.max(0, 500 - elapsed);
-        setTimeout(() => { setRefreshing(false); showToast("success"); }, delay);
-        return;
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load news");
-      if (isRefresh) {
-        setRefreshing(false);
-        showToast("error");
-        return;
-      }
-    } finally {
-      setLoading(false);
+  // Toast on refetch complete (skip initial load)
+  useEffect(() => {
+    if (!isLoading) hasLoaded.current = true;
+    if (wasFetching.current && !isFetching && hasLoaded.current) {
+      showToast(error ? "error" : "success");
     }
-  }, [showToast]);
+    wasFetching.current = isFetching;
+  }, [isFetching, isLoading, error, showToast]);
 
-  useEffect(() => { fetchNews(); }, [fetchNews]);
-
-  function stripHtml(html: string): string {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    return tmp.textContent ?? tmp.innerText ?? "";
-  }
+  const refreshing = isFetching && !isLoading;
 
   return (
     <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
@@ -173,12 +120,12 @@ export function NewsPage() {
           <h2 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
             Latest News
           </h2>
-          {!loading && !error && news.length > 0 && (
+          {!isLoading && !error && news.length > 0 && (
             <span className="text-[10px] text-text-muted/60 tabular-nums">{news.length} articles</span>
           )}
         </div>
         <button
-          onClick={() => fetchNews(true)}
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["news"] })}
           disabled={refreshing}
           className={`p-2 rounded-lg transition-all duration-150 disabled:opacity-40 ${
             refreshing
@@ -191,7 +138,7 @@ export function NewsPage() {
       </div>
 
       {/* Loading */}
-      {loading && (
+      {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="skeleton h-24 rounded-xl" />
@@ -200,11 +147,11 @@ export function NewsPage() {
       )}
 
       {/* Error */}
-      {error && !loading && (
+      {error && !isLoading && (
         <div className="glass rounded-xl p-6 text-center space-y-3">
           <AlertCircle size={28} className="mx-auto text-live" />
-          <p className="text-sm text-text-secondary">{error}</p>
-          <button onClick={() => fetchNews()} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
+          <p className="text-sm text-text-secondary">{error instanceof Error ? error.message : "Failed to load news"}</p>
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["news"] })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
             <RefreshCw size={12} /> Retry
           </button>
         </div>
@@ -212,24 +159,26 @@ export function NewsPage() {
 
       {/* Articles */}
       <div className={`space-y-2 transition-opacity duration-200 ${refreshing ? "opacity-40" : "opacity-100"}`}>
-      {!loading && !error && news.map((item, i) => {
+      {!isLoading && !error && news.map((item, i) => {
         const date = new Date(item.pubDate);
         const excerpt = stripHtml(item.description).slice(0, 140);
         const isFeatured = i === 0;
         const sourceColor = SOURCE_COLORS[item.source] ?? "text-text-muted";
 
         return (
-          <a
+          <motion.a
             key={`${item.source}-${i}`}
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            className={`stagger-item glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] group ${
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(i * 0.025, 0.2), duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className={`glass-light rounded-xl p-3.5 block space-y-1.5 card-hover border-l-[3px] group ${
               isFeatured
                 ? "border-l-accent bg-accent/5"
                 : "border-l-highlight/30 active:border-l-accent"
             }`}
-            style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
           >
             {isFeatured && (
               <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-0.5">
@@ -256,7 +205,7 @@ export function NewsPage() {
             <span className="inline-flex items-center gap-1 text-[11px] text-highlight font-medium tracking-wide">
               Read more <ExternalLink size={11} />
             </span>
-          </a>
+          </motion.a>
         );
       })}
       </div>

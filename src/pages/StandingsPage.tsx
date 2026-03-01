@@ -1,31 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
 import { Trophy, Users, RefreshCw, AlertCircle, Info, ExternalLink } from "lucide-react";
-
-interface Driver {
-  position: number;
-  points: number;
-  driver: {
-    name: string;
-    surname: string;
-    shortName?: string;
-    nationality: string;
-  };
-  team: {
-    teamId: string;
-    teamName: string;
-  };
-}
+import { fetchDriverStandings } from "../api/fetchers";
 
 const FIRST_RACE_2026 = new Date("2026-03-08T04:00:00Z");
 
 export function StandingsPage() {
   const [view, setView] = useState<"drivers" | "constructors">("drivers");
   const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+  const { data: drivers = [], isLoading, error } = useQuery({
+    queryKey: ["standings"],
+    queryFn: fetchDriverStandings,
+    staleTime: 10 * 60 * 1000,
+  });
 
   const isPreSeason = new Date() < FIRST_RACE_2026;
 
@@ -34,23 +26,6 @@ export function StandingsPage() {
     setSlideDir(v === "constructors" ? "right" : "left");
     setView(v);
   };
-
-  const fetchStandings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("https://f1api.dev/api/current/drivers-championship");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setDrivers(data.drivers_championship ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load standings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchStandings(); }, [fetchStandings]);
 
   const constructors = drivers.reduce(
     (acc, d) => {
@@ -62,23 +37,28 @@ export function StandingsPage() {
       acc[id].points += d.points;
       return acc;
     },
-    {} as Record<string, { name: string; color: string; drivers: Driver[]; points: number }>
+    {} as Record<string, { name: string; color: string; drivers: typeof drivers; points: number }>
   );
 
   const sortedConstructors = Object.entries(constructors).sort(([, a], [, b]) => b.points - a.points);
   const leaderPts = drivers.length > 0 ? drivers[0].points : 0;
 
-  const slideClass =
-    slideDir === "right"
-      ? "slide-from-right"
-      : slideDir === "left"
-        ? "slide-from-left"
-        : "";
+  const slideVariants = {
+    enter: (dir: "left" | "right" | null) => ({
+      x: dir === "right" ? 30 : dir === "left" ? -30 : 0,
+      opacity: 0,
+    }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: "left" | "right" | null) => ({
+      x: dir === "right" ? -30 : dir === "left" ? 30 : 0,
+      opacity: 0,
+    }),
+  };
 
   return (
     <div className="px-3 pt-3 pb-2 space-y-2.5 max-w-2xl mx-auto">
       {/* 2025 season banner */}
-      {isPreSeason && !loading && !error && drivers.length > 0 && (
+      {isPreSeason && !isLoading && !error && drivers.length > 0 && (
         <div className="season-banner glass rounded-xl px-4 py-3 flex items-start gap-3 border border-warning/20 bg-warning/5">
           <Info size={18} className="text-warning shrink-0 mt-0.5" />
           <div>
@@ -118,7 +98,7 @@ export function StandingsPage() {
       </div>
 
       {/* Loading */}
-      {loading && (
+      {isLoading && (
         <div className="space-y-2">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="skeleton h-14 rounded-xl" />
@@ -130,16 +110,25 @@ export function StandingsPage() {
       {error && (
         <div className="glass rounded-xl p-6 text-center space-y-3">
           <AlertCircle size={28} className="mx-auto text-live" />
-          <p className="text-sm text-text-secondary">{error}</p>
-          <button onClick={fetchStandings} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
+          <p className="text-sm text-text-secondary">{error instanceof Error ? error.message : "Failed to load standings"}</p>
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ["standings"] })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
             <RefreshCw size={12} /> Retry
           </button>
         </div>
       )}
 
       {/* Content with slide animation */}
-      {!loading && !error && (
-        <div key={view} className={slideClass}>
+      {!isLoading && !error && (
+        <AnimatePresence mode="wait" custom={slideDir}>
+          <motion.div
+            key={view}
+            custom={slideDir}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
           {/* Drivers */}
           {view === "drivers" && (
             <div className="space-y-1.5">
@@ -149,13 +138,13 @@ export function StandingsPage() {
                 const behind = d.points < leaderPts ? leaderPts - d.points : 0;
 
                 return (
-                  <div
+                  <motion.div
                     key={d.driver.surname}
-                    className="stagger-item glass-light rounded-xl px-3 py-2.5 flex items-center gap-3 border-l-4 card-hover"
-                    style={{
-                      borderLeftColor: color,
-                      animationDelay: `${Math.min(i * 15, 200)}ms`,
-                    }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.015, 0.2), duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className="glass-light rounded-xl px-3 py-2.5 flex items-center gap-3 border-l-4 card-hover"
+                    style={{ borderLeftColor: color }}
                   >
                     <span className="font-display text-[15px] font-bold text-text-muted w-6 text-center tabular-nums shrink-0">
                       {d.position}
@@ -184,7 +173,7 @@ export function StandingsPage() {
                       <span className="text-[11px] text-text-muted ml-0.5">pts</span>
                       {behind > 0 && <p className="text-[11px] text-text-muted tabular-nums">-{behind}</p>}
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -198,10 +187,13 @@ export function StandingsPage() {
                 const behind = team.points < leaderTeamPts ? leaderTeamPts - team.points : 0;
 
                 return (
-                  <div
+                  <motion.div
                     key={id}
-                    className="stagger-item glass-light rounded-xl overflow-hidden border-l-4"
-                    style={{ borderLeftColor: team.color, animationDelay: `${idx * 30}ms` }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(idx * 0.03, 0.2), duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className="glass-light rounded-xl overflow-hidden border-l-4"
+                    style={{ borderLeftColor: team.color }}
                   >
                     <div className="px-3.5 py-2.5 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -233,12 +225,13 @@ export function StandingsPage() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           )}
-        </div>
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   );
