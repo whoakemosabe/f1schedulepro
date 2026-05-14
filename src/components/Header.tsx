@@ -91,23 +91,27 @@ export function Header({ activeTab, timezone }: HeaderProps) {
     <header className="glass safe-top fixed top-0 left-0 right-0 z-50 border-x-0! border-t-0! accent-bar">
       {/* Main bar */}
       <div className="flex items-center gap-3 px-4 py-2">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-[0_0_16px_rgba(225,6,0,0.35)]">
+        <div className="shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-[0_0_16px_rgba(225,6,0,0.35)]">
           <span className="text-white font-display font-black text-[11px] leading-none">F1</span>
         </div>
-        <div className="flex items-baseline gap-2.5">
+        <div className="shrink-0 flex items-center gap-2.5">
           <h1 className="font-display text-[15px] font-bold tracking-widest text-text uppercase leading-none">
             {TITLES[activeTab]}
           </h1>
-          <span className="text-[11px] text-text-muted tracking-[0.2em] uppercase font-medium">
+          <span className="text-[11px] text-text-muted tracking-[0.2em] uppercase font-medium leading-none">
             2026
           </span>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="font-display text-[14px] font-bold tabular-nums text-text leading-none">
+        <div className="ml-auto shrink-0 flex items-center gap-2">
+          <span className="font-display text-[14px] font-bold tabular-nums lining-nums text-text leading-none">
             {timeStr.replace(/\s?(AM|PM)/, "")}
-            <span className="text-[10px] text-text-muted font-medium ml-0.5">{timeStr.includes("PM") ? "PM" : "AM"}</span>
           </span>
-          <span className="text-[10px] text-text-muted tracking-wider font-medium">{tzAbbr}</span>
+          <span className="text-[10px] text-text-muted font-medium leading-none tabular-nums">
+            {timeStr.includes("PM") ? "PM" : "AM"}
+          </span>
+          <span className="text-[9px] font-bold tracking-wider text-highlight/80 bg-highlight/10 border border-highlight/20 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap">
+            {tzAbbr}
+          </span>
         </div>
       </div>
 
