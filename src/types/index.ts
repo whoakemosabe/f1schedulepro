@@ -26,18 +26,17 @@ export type RaceStatus = "completed" | "active" | "upcoming";
 
 export interface DriverStanding {
   position: number;
+  points: number;
   driver: {
     name: string;
     surname: string;
-    shortName: string;
+    shortName?: string;
     nationality: string;
-    driverId: string;
   };
   team: {
     teamId: string;
     teamName: string;
   };
-  points: number;
 }
 
 export interface NewsItem {
@@ -45,6 +44,7 @@ export interface NewsItem {
   link: string;
   pubDate: string;
   description: string;
+  source: string;
   thumbnail?: string;
 }
 

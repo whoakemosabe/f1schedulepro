@@ -1,12 +1,6 @@
-// ── News ──
+import type { NewsItem, DriverStanding } from "../types";
 
-export interface NewsItem {
-  title: string;
-  link: string;
-  pubDate: string;
-  description: string;
-  source: string;
-}
+// ── News ──
 
 const RSS_SOURCES = [
   { name: "RACER", url: "https://racer.com/f1/feed/" },
@@ -57,22 +51,7 @@ export async function fetchNews(): Promise<NewsItem[]> {
 
 // ── Standings ──
 
-export interface Driver {
-  position: number;
-  points: number;
-  driver: {
-    name: string;
-    surname: string;
-    shortName?: string;
-    nationality: string;
-  };
-  team: {
-    teamId: string;
-    teamName: string;
-  };
-}
-
-export async function fetchDriverStandings(): Promise<Driver[]> {
+export async function fetchDriverStandings(): Promise<DriverStanding[]> {
   const res = await fetch("https://f1api.dev/api/current/drivers-championship");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();

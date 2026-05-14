@@ -30,7 +30,8 @@ export function useNotifications(): NotificationSettings {
   });
   const [minutesBefore, setMinutesBeforeState] = useState(() => {
     try {
-      return parseInt(localStorage.getItem(STORAGE_BEFORE) ?? "30", 10);
+      const parsed = parseInt(localStorage.getItem(STORAGE_BEFORE) ?? "", 10);
+      return Number.isFinite(parsed) ? parsed : 30;
     } catch {
       return 30;
     }

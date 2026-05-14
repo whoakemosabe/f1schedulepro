@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { Header } from "./components/Header";
 import { SchedulePage } from "./pages/SchedulePage";
@@ -14,6 +14,14 @@ export default function App() {
   const { timezone, setTimezone, theme, setTheme } = useSettings();
   const notifications = useNotifications();
 
+  // Track which tabs have ever been visited so data-fetching pages only
+  // start their queries after the user first opens that tab.
+  const visitedTabs = useRef<Set<TabId>>(new Set(["schedule"]));
+  const handleTabChange = useCallback((tab: TabId) => {
+    visitedTabs.current.add(tab);
+    setActiveTab(tab);
+  }, []);
+
   return (
     <div className="min-h-svh bg-bg text-text">
       <Header activeTab={activeTab} timezone={timezone} />
@@ -22,10 +30,10 @@ export default function App() {
           <SchedulePage timezone={timezone} />
         </div>
         <div className={activeTab === "standings" ? "page-enter" : "hidden"}>
-          <StandingsPage />
+          <StandingsPage isActive={visitedTabs.current.has("standings")} />
         </div>
         <div className={activeTab === "news" ? "page-enter" : "hidden"}>
-          <NewsPage />
+          <NewsPage isActive={visitedTabs.current.has("news")} />
         </div>
         <div className={activeTab === "settings" ? "page-enter" : "hidden"}>
           <SettingsPage
@@ -37,7 +45,7 @@ export default function App() {
           />
         </div>
       </main>
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }

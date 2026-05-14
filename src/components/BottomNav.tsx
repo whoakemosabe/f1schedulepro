@@ -28,17 +28,16 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const navRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement>>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!navRef.current) return;
-    const btn = navRef.current.querySelector(
-      `[data-tab="${activeTab}"]`
-    ) as HTMLElement | null;
-    if (!btn) return;
+    const btn = tabRefs.current[activeTab];
+    const nav = navRef.current;
+    if (!btn || !nav) return;
 
-    const navRect = navRef.current.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
     const btnRect = btn.getBoundingClientRect();
     setIndicator({
       left: btnRect.left - navRect.left + btnRect.width * 0.15,
@@ -64,7 +63,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           return (
             <button
               key={tab.id}
-              data-tab={tab.id}
+              ref={(el) => { if (el) tabRefs.current[tab.id] = el; }}
               onClick={() => onTabChange(tab.id)}
               className="flex-1 flex flex-col items-center gap-0.5 py-2.5 pt-3 relative min-h-13"
             >

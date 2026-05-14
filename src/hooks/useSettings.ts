@@ -27,7 +27,9 @@ export function useSettings() {
     localStorage.setItem(STORAGE_KEY_THEME, t);
   }, []);
 
-  // Detect user's timezone on first visit
+  // The useState initialiser already reads from localStorage or falls back to
+  // Intl.DateTimeFormat(). This effect persists that detected value back to
+  // localStorage on first visit so subsequent visits restore it correctly.
   useEffect(() => {
     if (!localStorage.getItem(STORAGE_KEY_TZ)) {
       try {

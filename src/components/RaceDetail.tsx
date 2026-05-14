@@ -316,7 +316,7 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
 
             return resultsUrl ? (
               <a
-                key={i}
+                key={session.name}
                 href={resultsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -325,7 +325,7 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                 {content}
               </a>
             ) : (
-              <div key={i} className={className}>
+              <div key={session.name} className={className}>
                 {content}
               </div>
             );

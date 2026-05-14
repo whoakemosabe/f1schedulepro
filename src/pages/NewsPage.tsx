@@ -38,12 +38,20 @@ function stripHtml(html: string): string {
   return tmp.textContent ?? tmp.innerText ?? "";
 }
 
-export function NewsPage() {
+interface Props {
+  isActive: boolean;
+}
+
+export function NewsPage({ isActive }: Props) {
+  const hasBeenActive = useRef(false);
+  if (isActive) hasBeenActive.current = true;
+
   const queryClient = useQueryClient();
   const { data: news = [], isLoading, error, isFetching } = useQuery({
     queryKey: ["news"],
     queryFn: fetchNews,
     staleTime: 5 * 60 * 1000,
+    enabled: hasBeenActive.current,
   });
 
   const [sortMode, setSortMode] = useState<SortMode>("newest");

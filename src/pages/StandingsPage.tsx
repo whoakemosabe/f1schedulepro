@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
@@ -7,7 +7,14 @@ import { fetchDriverStandings } from "../api/fetchers";
 
 const FIRST_RACE_2026 = new Date("2026-03-08T04:00:00Z");
 
-export function StandingsPage() {
+interface Props {
+  isActive: boolean;
+}
+
+export function StandingsPage({ isActive }: Props) {
+  const hasBeenActive = useRef(false);
+  if (isActive) hasBeenActive.current = true;
+
   const [view, setView] = useState<"drivers" | "constructors">("drivers");
 
   const queryClient = useQueryClient();
@@ -15,6 +22,7 @@ export function StandingsPage() {
     queryKey: ["standings"],
     queryFn: fetchDriverStandings,
     staleTime: 10 * 60 * 1000,
+    enabled: hasBeenActive.current,
   });
 
   const isPreSeason = new Date() < FIRST_RACE_2026;
