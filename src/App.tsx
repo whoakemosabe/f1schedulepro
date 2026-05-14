@@ -27,7 +27,7 @@ export default function App() {
       <Header activeTab={activeTab} timezone={timezone} />
       <main className="pt-24 pb-20 overflow-x-hidden">
         <div className={activeTab === "schedule" ? "page-enter" : "hidden"}>
-          <SchedulePage timezone={timezone} />
+          <SchedulePage timezone={timezone} isActive={activeTab === "schedule"} />
         </div>
         <div className={activeTab === "standings" ? "page-enter" : "hidden"}>
           <StandingsPage isActive={visitedTabs.current.has("standings")} />

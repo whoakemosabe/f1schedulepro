@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ExternalLink, AlertCircle, Clock, Check, Tv, Youtube, Bookmark, Newspaper, MessageCircle, Calendar, ArrowUpDown } from "lucide-react";
@@ -45,6 +45,11 @@ interface Props {
 export function NewsPage({ isActive }: Props) {
   const hasBeenActive = useRef(false);
   if (isActive) hasBeenActive.current = true;
+
+  // Scroll to top whenever the tab is re-opened
+  useEffect(() => {
+    if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
+  }, [isActive]);
 
   const queryClient = useQueryClient();
   const { data: news = [], isLoading, error, isFetching } = useQuery({

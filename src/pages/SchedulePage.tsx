@@ -7,11 +7,17 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
   timezone: string;
+  isActive: boolean;
 }
 
-export function SchedulePage({ timezone }: Props) {
+export function SchedulePage({ timezone, isActive }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
+
+  // Scroll to top whenever the tab is re-opened
+  useEffect(() => {
+    if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
+  }, [isActive]);
 
   // Tick every 30s so race statuses update live (upcoming → active → completed)
   const [tick, setTick] = useState(0);

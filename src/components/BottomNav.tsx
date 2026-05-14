@@ -65,6 +65,8 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               key={tab.id}
               ref={(el) => { if (el) tabRefs.current[tab.id] = el; }}
               onClick={() => onTabChange(tab.id)}
+              aria-label={tab.label}
+              aria-current={isActive ? "page" : undefined}
               className="flex-1 flex flex-col items-center gap-0.5 py-2.5 pt-3 relative min-h-13"
             >
               <Icon

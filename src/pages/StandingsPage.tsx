@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
@@ -32,7 +32,7 @@ export function StandingsPage({ isActive }: Props) {
 
   const isPreSeason = new Date() < FIRST_RACE_2026;
 
-  const constructors = drivers.reduce(
+  const constructors = useMemo(() => drivers.reduce(
     (acc, d) => {
       const id = d.team?.teamId ?? "unknown";
       if (!acc[id]) {
@@ -43,7 +43,7 @@ export function StandingsPage({ isActive }: Props) {
       return acc;
     },
     {} as Record<string, { name: string; color: string; drivers: typeof drivers; points: number }>
-  );
+  ), [drivers]);
 
   const sortedConstructors = Object.entries(constructors).sort(([, a], [, b]) => b.points - a.points);
   const leaderPts = drivers.length > 0 ? drivers[0].points : 0;
