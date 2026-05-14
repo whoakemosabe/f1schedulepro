@@ -36,7 +36,7 @@ interface HeaderProps {
 }
 
 export function Header({ activeTab, timezone }: HeaderProps) {
-  // Live clock — ticks every second
+  // Live clock — ticks every second for the time display
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -52,9 +52,17 @@ export function Header({ activeTab, timezone }: HeaderProps) {
   });
   const tzAbbr = getTimezoneAbbr(timezone);
 
+  // Slow tick (every 10 s) for session detection — "which session is next"
+  // almost never changes, so re-scanning 125 sessions every second is wasteful.
+  const [sessionTick, setSessionTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSessionTick((t) => t + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Find live session or next upcoming session
   const sessionInfo = useMemo(() => {
-    const nowMs = now.getTime();
+    const nowMs = Date.now();
     for (const race of schedule2026) {
       for (const session of race.sessions) {
         const startMs = new Date(session.dateUtc).getTime();
@@ -69,7 +77,7 @@ export function Header({ activeTab, timezone }: HeaderProps) {
       }
     }
     return null;
-  }, [now]);
+  }, [sessionTick]);
 
   const countdown = useCountdown(
     sessionInfo && !sessionInfo.live ? sessionInfo.session.dateUtc : null

@@ -257,18 +257,27 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
         </div>
 
         <div className="divide-y divide-glass-border">
-          {race.sessions.map((session, i) => {
-            const isPast = new Date(session.dateUtc) < new Date();
+          {race.sessions.map((session) => {
+            // A session is "live" if we're inside its start→start+duration window.
+            // Re-use the already-computed liveSession rather than recalculating.
+            const isLive = liveSession?.name === session.name;
+            // Mark past only after the live window has closed, using the same
+            // nowMs reference as liveSession so the two states never overlap.
+            const isPast = !isLive && new Date(session.dateUtc).getTime() < nowMs;
             const isGlobalNext = globalNextSessionDate && session.dateUtc === globalNextSessionDate;
             const isRace = session.name === "Race";
             const isSprint = session.name === "Sprint" || session.name === "Sprint Qualifying";
             const isQualifying = session.name === "Qualifying";
+            // Only offer a results link once the session is fully in the past
+            // (not while it's live — results don't exist yet).
             const resultsUrl = isPast ? getResultsUrl(race, session.name) : null;
 
             const content = (
               <>
                 <div className="flex items-center gap-2.5">
-                  {isPast ? (
+                  {isLive ? (
+                    <span className="w-2.5 h-2.5 rounded-full bg-live live-dot shrink-0" />
+                  ) : isPast ? (
                     <Check size={14} className="text-success shrink-0" />
                   ) : isRace ? (
                     <Flag size={14} className="text-accent" />
@@ -281,12 +290,12 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                   )}
                   <span
                     className={`text-sm font-medium ${
-                      isPast ? "text-text-muted line-through" : isRace ? "text-text font-semibold" : isSprint ? "text-warning" : isQualifying ? "text-highlight" : "text-text-secondary"
+                      isLive ? "text-live font-semibold" : isPast ? "text-text-muted line-through" : isRace ? "text-text font-semibold" : isSprint ? "text-warning" : isQualifying ? "text-highlight" : "text-text-secondary"
                     }`}
                   >
                     {session.name}
                   </span>
-                  {isGlobalNext && (
+                  {isGlobalNext && !isLive && (
                     <span className="text-[11px] font-bold text-highlight bg-highlight/12 px-1.5 py-0.5 rounded tracking-widest uppercase border border-highlight/15">
                       Next
                     </span>
@@ -297,10 +306,10 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
                 </div>
                 <div className="flex items-center gap-2 tabular-nums">
                   <div className="text-right">
-                    <div className={`text-[13px] ${isPast ? "text-text-muted line-through" : "text-text-secondary"}`}>{formatSessionTime(session.dateUtc, timezone)}</div>
+                    <div className={`text-[13px] ${isPast ? "text-text-muted line-through" : isLive ? "text-live" : "text-text-secondary"}`}>{formatSessionTime(session.dateUtc, timezone)}</div>
                     <div className="text-[11px] text-text-muted">{formatSessionDate(session.dateUtc, timezone)}</div>
                   </div>
-                  {!isPast && (
+                  {!isPast && !isLive && (
                     <Clock size={13} className="text-text-muted/30 shrink-0" />
                   )}
                 </div>
@@ -309,7 +318,7 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
 
             const className = `
               flex items-center justify-between px-4 py-2.5 transition-colors duration-100
-              ${isGlobalNext ? "bg-highlight/8 border-l-[3px] border-l-highlight" : "border-l-[3px] border-l-transparent"}
+              ${isLive ? "bg-live/8 border-l-[3px] border-l-live" : isGlobalNext ? "bg-highlight/8 border-l-[3px] border-l-highlight" : "border-l-[3px] border-l-transparent"}
               ${isPast ? "opacity-40" : ""}
               ${resultsUrl ? "active:bg-surface-light" : ""}
             `;
