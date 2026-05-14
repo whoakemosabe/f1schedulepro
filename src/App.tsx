@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { Header } from "./components/Header";
 import { SchedulePage } from "./pages/SchedulePage";
@@ -14,16 +14,20 @@ export default function App() {
   const { timezone, setTimezone, theme, setTheme } = useSettings();
   const notifications = useNotifications();
 
-  const renderPage = useCallback(() => {
-    switch (activeTab) {
-      case "schedule":
-        return <SchedulePage timezone={timezone} />;
-      case "standings":
-        return <StandingsPage />;
-      case "news":
-        return <NewsPage />;
-      case "settings":
-        return (
+  return (
+    <div className="min-h-svh bg-bg text-text">
+      <Header activeTab={activeTab} timezone={timezone} />
+      <main className="pt-24 pb-20 overflow-x-hidden">
+        <div className={activeTab === "schedule" ? "page-enter" : "hidden"}>
+          <SchedulePage timezone={timezone} />
+        </div>
+        <div className={activeTab === "standings" ? "page-enter" : "hidden"}>
+          <StandingsPage />
+        </div>
+        <div className={activeTab === "news" ? "page-enter" : "hidden"}>
+          <NewsPage />
+        </div>
+        <div className={activeTab === "settings" ? "page-enter" : "hidden"}>
           <SettingsPage
             timezone={timezone}
             setTimezone={setTimezone}
@@ -31,16 +35,6 @@ export default function App() {
             setTheme={setTheme}
             notifications={notifications}
           />
-        );
-    }
-  }, [activeTab, timezone, setTimezone, theme, setTheme, notifications]);
-
-  return (
-    <div className="min-h-svh bg-bg text-text">
-      <Header activeTab={activeTab} timezone={timezone} />
-      <main className="pt-24 pb-20 overflow-x-hidden">
-        <div key={activeTab} className="page-enter">
-          {renderPage()}
         </div>
       </main>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

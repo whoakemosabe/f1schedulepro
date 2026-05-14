@@ -102,14 +102,14 @@ export function Header({ activeTab, timezone }: HeaderProps) {
             2026
           </span>
         </div>
-        <div className="ml-auto shrink-0 flex items-center gap-2">
-          <span className="font-display text-[14px] font-bold tabular-nums lining-nums text-text leading-none">
-            {timeStr.replace(/\s?(AM|PM)/, "")}
+        <div className="ml-auto shrink-0 flex items-center gap-2 overflow-hidden">
+          <span className="font-mono text-[13px] font-bold text-text leading-none w-[7.5ch] shrink-0">
+            {timeStr.replace(/\s?(AM|PM)/, "").trim()}
           </span>
-          <span className="text-[10px] text-text-muted font-medium leading-none tabular-nums">
+          <span className="text-[10px] text-text-muted font-mono font-medium leading-none shrink-0 w-[2ch]">
             {timeStr.includes("PM") ? "PM" : "AM"}
           </span>
-          <span className="text-[9px] font-bold tracking-wider text-highlight/80 bg-highlight/10 border border-highlight/20 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap">
+          <span className="text-[9px] font-bold tracking-wider text-highlight/80 bg-highlight/10 border border-highlight/20 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap shrink-0">
             {tzAbbr}
           </span>
         </div>
