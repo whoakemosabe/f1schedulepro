@@ -2,7 +2,7 @@ import type { Race, RaceStatus, Session } from "../types";
 
 export const TIMEZONE_OPTIONS = [
   { value: "UTC", label: "UTC" },
-  { value: "Atlantic/Reykjavik", label: "GMT — Iceland" },
+  { value: "Atlantic/Reykjavik", label: "GMT" },
   { value: "America/New_York", label: "Eastern (ET)" },
   { value: "America/Chicago", label: "Central (CT)" },
   { value: "America/Denver", label: "Mountain (MT)" },
