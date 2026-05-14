@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
@@ -14,6 +14,11 @@ interface Props {
 export function StandingsPage({ isActive }: Props) {
   const hasBeenActive = useRef(false);
   if (isActive) hasBeenActive.current = true;
+
+  // Scroll to top whenever the tab is re-opened
+  useEffect(() => {
+    if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
+  }, [isActive]);
 
   const [view, setView] = useState<"drivers" | "constructors">("drivers");
 
