@@ -1,5 +1,15 @@
 import type { Race, RaceStatus, Session } from "../types";
 
+export const SESSION_DURATION_MIN: Record<string, number> = {
+  "Practice 1": 60,
+  "Practice 2": 60,
+  "Practice 3": 60,
+  "Sprint Qualifying": 60,
+  "Sprint": 60,
+  "Qualifying": 60,
+  "Race": 150,
+};
+
 export const TIMEZONE_OPTIONS = [
   { value: "UTC", label: "UTC" },
   { value: "Atlantic/Reykjavik", label: "GMT" },

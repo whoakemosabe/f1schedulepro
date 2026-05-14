@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import type { Race } from "../types";
 import {
   formatSessionDate,
   formatSessionTime,
   getTimezoneAbbr,
+  SESSION_DURATION_MIN,
 } from "../utils/time";
 import { useCountdown } from "../hooks/useCountdown";
 import { getNextSession, getRaceStatus } from "../utils/time";
@@ -30,17 +32,6 @@ interface Props {
   timezone: string;
   globalNextSessionDate: string | null;
 }
-
-// Estimated session durations in minutes (for live detection)
-const SESSION_DURATION_MIN: Record<string, number> = {
-  "Practice 1": 60,
-  "Practice 2": 60,
-  "Practice 3": 60,
-  "Sprint Qualifying": 60,
-  "Sprint": 60,
-  "Qualifying": 60,
-  "Race": 150,
-};
 
 function getSessionColors(name: string) {
   if (name === "Race") return { border: "border-live/25", text: "text-live", bg: "bg-live/8" };
@@ -80,8 +71,13 @@ export function RaceDetail({ race, timezone, globalNextSessionDate }: Props) {
   const tzAbbr = getTimezoneAbbr(timezone);
   const stats = getCircuitStats(race.circuit.id);
 
-  // Detect live session
-  const nowMs = Date.now();
+  // Reactive tick so live detection updates without needing a re-render from a parent
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
   const liveSession = race.sessions.find((s) => {
     const startMs = new Date(s.dateUtc).getTime();
     const durationMs = (SESSION_DURATION_MIN[s.name] ?? 90) * 60 * 1000;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import type { TabId } from "../types";
 import schedule2026 from "../data/schedule2026";
-import { getNextSession, getTimezoneAbbr } from "../utils/time";
+import { getNextSession, getTimezoneAbbr, SESSION_DURATION_MIN } from "../utils/time";
 import { getFlagUrl } from "../utils/countries";
 import { useCountdown } from "../hooks/useCountdown";
 import { FlipDigit } from "./FlipDigit";
@@ -11,17 +11,6 @@ const TITLES: Record<TabId, string> = {
   standings: "Standings",
   news: "News",
   settings: "Settings",
-};
-
-// Estimated session durations in minutes
-const SESSION_DURATION_MIN: Record<string, number> = {
-  "Practice 1": 60,
-  "Practice 2": 60,
-  "Practice 3": 60,
-  "Sprint Qualifying": 60,
-  "Sprint": 60,
-  "Qualifying": 60,
-  "Race": 150,
 };
 
 // Session-type badge colors
