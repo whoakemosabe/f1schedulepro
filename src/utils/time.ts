@@ -11,7 +11,6 @@ export const SESSION_DURATION_MIN: Record<string, number> = {
 };
 
 export const TIMEZONE_OPTIONS = [
-  { value: "UTC", label: "UTC" },
   { value: "Atlantic/Reykjavik", label: "GMT" },
   { value: "America/New_York", label: "Eastern (ET)" },
   { value: "America/Chicago", label: "Central (CT)" },

@@ -7,7 +7,7 @@ function getInitialTimezone(): string {
   try {
     return localStorage.getItem(STORAGE_KEY_TZ) ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return "UTC";
+    return "Atlantic/Reykjavik";
   }
 }
 
