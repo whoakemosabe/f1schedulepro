@@ -173,6 +173,14 @@ export function SettingsPage({ timezone, setTimezone, notifications }: Props) {
                   Tap the toggle to enable notifications. Your browser will ask for permission.
                 </p>
               )}
+
+              {notifications.permission === "granted" && (
+                <p className="text-[11px] text-text-muted leading-relaxed">
+                  {notifications.hasPushServer
+                    ? "Notifications will arrive even when the app is closed."
+                    : "Notifications fire when the app is open or recently active."}
+                </p>
+              )}
             </>
           )}
         </div>
