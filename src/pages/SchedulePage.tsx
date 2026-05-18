@@ -23,6 +23,13 @@ export function SchedulePage({ timezone, isActive }: Props) {
     }
   }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Scroll to top whenever a race detail is opened so the hero card is visible.
+  useEffect(() => {
+    if (selectedIndex !== null) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [selectedIndex]);
+
   // Tick every 30s so race statuses update live (upcoming → active → completed)
   const [tick, setTick] = useState(0);
   useEffect(() => {
