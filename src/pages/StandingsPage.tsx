@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTeamColor, getTeamUrl } from "../utils/teams";
 import { getCountryCode, getFlagUrl } from "../utils/countries";
