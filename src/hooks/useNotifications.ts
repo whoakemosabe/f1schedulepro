@@ -19,10 +19,15 @@ export interface NotificationSettings {
   hasPushServer: boolean;
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from([...atob(base64)].map((c) => c.charCodeAt(0)));
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
 }
 
 async function subscribeToPush(minutesBefore: number): Promise<void> {
