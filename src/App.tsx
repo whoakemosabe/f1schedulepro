@@ -30,10 +30,10 @@ export default function App() {
           <SchedulePage timezone={timezone} isActive={activeTab === "schedule"} />
         </div>
         <div className={activeTab === "standings" ? "page-enter" : "hidden"}>
-          <StandingsPage isActive={visitedTabs.current.has("standings")} />
+          <StandingsPage isActive={activeTab === "standings"} hasBeenActive={visitedTabs.current.has("standings")} />
         </div>
         <div className={activeTab === "news" ? "page-enter" : "hidden"}>
-          <NewsPage isActive={visitedTabs.current.has("news")} />
+          <NewsPage isActive={activeTab === "news"} hasBeenActive={visitedTabs.current.has("news")} />
         </div>
         <div className={activeTab === "settings" ? "page-enter" : "hidden"}>
           <SettingsPage
@@ -42,6 +42,7 @@ export default function App() {
             theme={theme}
             setTheme={setTheme}
             notifications={notifications}
+            isActive={activeTab === "settings"}
           />
         </div>
       </main>

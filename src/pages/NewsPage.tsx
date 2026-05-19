@@ -40,13 +40,10 @@ function stripHtml(html: string): string {
 
 interface Props {
   isActive: boolean;
+  hasBeenActive: boolean;
 }
 
-export function NewsPage({ isActive }: Props) {
-  const hasBeenActive = useRef(false);
-  if (isActive) hasBeenActive.current = true;
-
-  // Scroll to top whenever the tab is re-opened
+export function NewsPage({ isActive, hasBeenActive }: Props) {
   useEffect(() => {
     if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
   }, [isActive]);
@@ -56,7 +53,7 @@ export function NewsPage({ isActive }: Props) {
     queryKey: ["news"],
     queryFn: fetchNews,
     staleTime: 5 * 60 * 1000,
-    enabled: hasBeenActive.current,
+    enabled: hasBeenActive,
   });
 
   const [sortMode, setSortMode] = useState<SortMode>("newest");

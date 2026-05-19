@@ -9,13 +9,10 @@ const FIRST_RACE_2026 = new Date("2026-03-08T04:00:00Z");
 
 interface Props {
   isActive: boolean;
+  hasBeenActive: boolean;
 }
 
-export function StandingsPage({ isActive }: Props) {
-  const hasBeenActive = useRef(false);
-  if (isActive) hasBeenActive.current = true;
-
-  // Scroll to top whenever the tab is re-opened
+export function StandingsPage({ isActive, hasBeenActive }: Props) {
   useEffect(() => {
     if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
   }, [isActive]);
@@ -27,7 +24,7 @@ export function StandingsPage({ isActive }: Props) {
     queryKey: ["standings"],
     queryFn: fetchDriverStandings,
     staleTime: 10 * 60 * 1000,
-    enabled: hasBeenActive.current,
+    enabled: hasBeenActive,
   });
 
   const isPreSeason = new Date() < FIRST_RACE_2026;

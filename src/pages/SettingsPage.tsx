@@ -9,11 +9,16 @@ interface Props {
   theme: string;
   setTheme: (t: string) => void;
   notifications: NotificationSettings;
+  isActive: boolean;
 }
 
-export function SettingsPage({ timezone, setTimezone, notifications }: Props) {
+export function SettingsPage({ timezone, setTimezone, notifications, isActive }: Props) {
   const [open, setOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isActive) window.scrollTo({ top: 0, behavior: "instant" });
+  }, [isActive]);
 
   const current = TIMEZONE_OPTIONS.find((o) => o.value === timezone);
   const abbr = getTimezoneAbbr(timezone);
