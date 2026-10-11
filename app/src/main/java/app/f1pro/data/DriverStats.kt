@@ -19,6 +19,8 @@ data class DriverRound(
     val fastestRank: Int? = null,
     val sprintFinish: Int? = null,
     val sprintPoints: Double = 0.0,
+    /** The team they drove for at this round (Jolpica's constructor id). */
+    val constructorId: String = "",
 ) {
     /** Places made up from the grid (negative: lost). Null without a finish or a grid slot. */
     val gained: Int? get() = if (finish != null && grid != null && grid > 0) grid - finish else null
@@ -241,6 +243,7 @@ object DriverStats {
                         fastestRank = res.optJSONObject("FastestLap")?.optString("rank")?.toIntOrNull(),
                         sprintFinish = sp?.first,
                         sprintPoints = sp?.second ?: 0.0,
+                        constructorId = res.optJSONObject("Constructor")?.optString("constructorId").orEmpty(),
                     )
                 }
             }
@@ -258,6 +261,19 @@ object DriverStats {
         }
         val drivers = rounds.mapValues { (id, m) -> DriverSeason(season, id, codes[id], numbers[id], m.values.sortedBy { it.round }) }
         return SeasonStats(season, entries.values.toList(), drivers, fetchedAt)
+    }
+
+    /**
+     * A team's points total after each round: every driver's points in rounds they drove for
+     * [teamId], so a mid-season seat swap counts for the right team.
+     */
+    fun teamCumulative(drivers: Collection<DriverSeason>, teamId: String): List<Pair<Int, Double>> {
+        val per = sortedMapOf<Int, Double>()
+        for (d in drivers) for (r in d.rounds) {
+            per[r.round] = (per[r.round] ?: 0.0) + if (r.constructorId == teamId) r.allPoints else 0.0
+        }
+        var sum = 0.0
+        return per.map { (round, pts) -> sum += pts; round to sum }
     }
 
     fun headToHead(a: DriverSeason, b: DriverSeason): HeadToHead {

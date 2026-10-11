@@ -351,9 +351,14 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** The standings season's full data (every driver who raced, for team totals and the title fight). */
+    var seasonAll by mutableStateOf<app.f1pro.data.DriverStats.SeasonStats?>(null)
+        private set
+
     /** Fills [driverSeasons] for every driver in the standings from one season download. */
     private fun publish(season: Int, stats: app.f1pro.data.DriverStats.SeasonStats) {
         seasonStats[season] = stats
+        if (standings?.season == season) seasonAll = stats
         if (stats.fetchedAt > 0) seasonDataAt[season] = stats.fetchedAt
         val st = standings ?: return
         if (st.season != season) return
@@ -532,6 +537,22 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         countdownOn = on
         rescheduled()
     }
+
+    var bells by mutableStateOf(prefs.sessionBells)
+        private set
+
+    /** Turns one session's bell on or off; returns whether it's now on. */
+    fun toggleBell(key: String): Boolean {
+        val on = key !in bells
+        bells = if (on) bells + key else bells - key
+        prefs.sessionBells = bells
+        rescheduled()
+        return on
+    }
+
+    /** Whether the usual Notifications setting already reminds for this session. */
+    fun remindedAnyway(sessionName: String): Boolean =
+        alertsOn && app.f1pro.data.Sessions.wanted(sessionName, alertWhich)
 
     fun setLead(min: Int) {
         prefs.leadMinutes = min

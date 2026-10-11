@@ -40,6 +40,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("started_posted", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("started_posted", v.toSortedSet().toList().takeLast(150).toSet()).apply()
 
+    /** Sessions with their own bell on (race key + session name), reminded whatever the usual setting. */
+    var sessionBells: Set<String>
+        get() = p.getStringSet("session_bells", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("session_bells", v.toSortedSet().toList().takeLast(60).toSet()).apply()
+
     var sentReminders: Set<String>
         get() = p.getStringSet("sent_reminders", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("sent_reminders", v.toSortedSet().toList().takeLast(150).toSet()).apply()
@@ -48,6 +53,16 @@ class Prefs(context: Context) {
     var standingsHintSeen: Boolean
         get() = p.getBoolean("standings_hint_seen", false)
         set(v) = p.edit().putBoolean("standings_hint_seen", v).apply()
+
+    /** The title fight card on Standings is open (true) or folded. */
+    var titleFightOpen: Boolean
+        get() = p.getBoolean("title_fight_open", true)
+        set(v) = p.edit().putBoolean("title_fight_open", v).apply()
+
+    /** The starting grid card on race pages is open. */
+    var gridOpen: Boolean
+        get() = p.getBoolean("grid_open", true)
+        set(v) = p.edit().putBoolean("grid_open", v).apply()
 
     var standingsView: String
         get() = p.getString("standings_view", "drivers") ?: "drivers"

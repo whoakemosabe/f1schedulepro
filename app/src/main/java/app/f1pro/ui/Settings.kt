@@ -315,26 +315,8 @@ fun SettingsPage(state: AppState) {
         FavouriteSettings(state)
 
         // ── Widgets ──
-        SettingsCard("Widgets", R.drawable.lc_timer) {
-            Small("A next-session countdown (2×2), the full race weekend (4×2) and your driver (2×2). Long-press your home screen → Widgets → F1 Pro, or add one here:")
-            val awm = AppWidgetManager.getInstance(context)
-            if (awm.isRequestPinAppWidgetSupported) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f)) {
-                        ActionButton("Next session", R.drawable.lc_timer) {
-                            awm.requestPinAppWidget(ComponentName(context, NextWidgetReceiver::class.java), null, null)
-                        }
-                    }
-                    Box(Modifier.weight(1f)) {
-                        ActionButton("Race weekend", R.drawable.lc_calendar) {
-                            awm.requestPinAppWidget(ComponentName(context, WeekendWidgetReceiver::class.java), null, null)
-                        }
-                    }
-                }
-                ActionButton("Your driver", R.drawable.lc_star) {
-                    awm.requestPinAppWidget(ComponentName(context, app.f1pro.widget.DriverWidgetReceiver::class.java), null, null)
-                }
-            }
+        SettingsCard("Home screen widgets", R.drawable.lc_timer) {
+            WidgetsSettings(state)
         }
 
         // ── Updates ──
@@ -612,5 +594,107 @@ fun DriverPickerMenu(state: AppState, open: Boolean, onDismiss: () -> Unit) {
                 },
             )
         }
+    }
+}
+
+/**
+ * Each widget with a small preview and one button: Add to home screen (your phone asks
+ * where), or "On your home screen" once one is placed. Rechecked when you come back.
+ */
+@Composable
+private fun WidgetsSettings(state: AppState) {
+    val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val awm = AppWidgetManager.getInstance(context)
+    var tick by remember { mutableStateOf(0) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { tick++ }
+    val now = rememberNow(60_000)
+    val next = remember(state.seasons, now / 60_000) { Planner.next(state.seasons, now) }
+    val weekend = remember(state.seasons, now / 60_000) { Planner.weekend(state.seasons, now) }
+    val fav = state.favourite
+    val favRow = fav?.let { f -> state.standings?.drivers?.firstOrNull { f.matches(it.name, it.surname) } }
+    val fmt = LocalFmt.current
+
+    @Composable
+    fun Item(title: String, receiver: Class<*>, preview: @Composable () -> Unit) {
+        val placed = remember(tick) { awm.getAppWidgetIds(ComponentName(context, receiver)).isNotEmpty() }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(width = 128.dp, height = 76.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(C.Surface)
+                    .border(1.dp, C.GlassBorder, RoundedCornerShape(16.dp))
+                    .padding(10.dp),
+            ) { preview() }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(title, style = inter(14.sp, FontWeight.SemiBold))
+                if (placed) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp))
+                            .background(C.Success.copy(alpha = 0.1f)).border(1.dp, C.Success.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Ic(R.drawable.lc_check, C.Success, 14.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("On your home screen", style = inter(12.sp, FontWeight.SemiBold, C.Success))
+                    }
+                } else if (awm.isRequestPinAppWidgetSupported) {
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp)).background(C.Accent)
+                            .tap {
+                                Haptics.confirm(view)
+                                awm.requestPinAppWidget(ComponentName(context, receiver), null, null)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Add to home screen", style = inter(13.sp, FontWeight.SemiBold, Color.White)) }
+                } else {
+                    Small("Long-press your home screen → Widgets → F1 Pro.")
+                }
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Item("Next session", NextWidgetReceiver::class.java) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    next?.let { "${it.race.name.replace("Grand Prix", "GP")} · ${it.session.short}" } ?: "No session scheduled",
+                    style = inter(10.sp, color = C.TextSecondary), maxLines = 1,
+                )
+                Text(next?.let { Fmt.until(it.session.start, now).removePrefix("in ") } ?: "—", style = orbitron(17.sp, FontWeight.Bold, C.Highlight), maxLines = 1)
+            }
+        }
+        Item("Race weekend", WeekendWidgetReceiver::class.java) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(weekend?.name?.replace("Grand Prix", "GP") ?: "This weekend", style = inter(10.sp, color = C.TextSecondary), maxLines = 1)
+                for (sess in weekend?.sessions.orEmpty().takeLast(3)) {
+                    Row {
+                        Text(sess.short, style = inter(10.sp, color = if (sess.name == "Race") C.AccentText else C.Text), modifier = Modifier.weight(1f))
+                        Text(if (sess.tbc) "TBC" else fmt.time(sess.start), style = inter(10.sp, color = C.TextSecondary))
+                    }
+                }
+            }
+        }
+        Item("Your driver", app.f1pro.widget.DriverWidgetReceiver::class.java) {
+            if (favRow == null) {
+                Text(if (fav == null) "Pick a driver in Your driver above" else fav.name, style = inter(10.sp, color = C.TextSecondary))
+            } else {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CodeChip(favRow.code, Color(app.f1pro.data.Teams.color(favRow.teamId)), large = false)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Your driver", style = inter(10.sp, color = C.TextSecondary))
+                    }
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("P${favRow.position}", style = orbitron(17.sp, FontWeight.Bold, C.Text))
+                        Text("  ${Fmt.points(favRow.points)} pts", style = inter(11.sp, color = C.TextSecondary))
+                    }
+                }
+            }
+        }
+        Small("Your phone asks where to put it. Resize them on the home screen.")
     }
 }

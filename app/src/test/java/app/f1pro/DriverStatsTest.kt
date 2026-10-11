@@ -209,4 +209,17 @@ class DriverStatsTest {
         assertTrue(fav.matches("Kimi", "Antonelli"))
         assertFalse(fav.matches("George", "Russell"))
     }
+
+    @Test
+    fun teamTotalsFollowTheSeatNotTheDriver() {
+        fun row(id: String, team: String, pts: Int) =
+            """{"position":"1","positionText":"1","points":"$pts","Driver":{"driverId":"$id","givenName":"G","familyName":"$id"},"Constructor":{"constructorId":"$team"}}"""
+        val page = """{"MRData":{"RaceTable":{"Races":[
+            {"round":"1","raceName":"R1","Results":[${row("a", "red_bull", 25)},${row("b", "rb", 10)}]},
+            {"round":"2","raceName":"R2","Results":[${row("a", "red_bull", 18)},${row("b", "red_bull", 6)}]}]}}}"""
+        val s = DriverStats.seasonAll(2025, listOf(page), emptyList(), emptyList())
+        assertEquals("rb", s.drivers.getValue("b").rounds[0].constructorId)
+        assertEquals(listOf(1 to 25.0, 2 to 49.0), DriverStats.teamCumulative(s.drivers.values, "red_bull"))
+        assertEquals(listOf(1 to 10.0, 2 to 10.0), DriverStats.teamCumulative(s.drivers.values, "rb"))
+    }
 }

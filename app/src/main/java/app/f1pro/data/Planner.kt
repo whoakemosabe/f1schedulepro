@@ -51,9 +51,11 @@ object Planner {
         leadMs: Long,
         which: String,
         sent: Set<String>,
+        bells: Set<String> = emptySet(),
+        alertsOn: Boolean = true,
     ): List<Slot> = slots(seasons).filter { s ->
         val st = s.session.start
-        !s.session.tbc && Sessions.wanted(s.session.name, which) &&
+        !s.session.tbc && ((alertsOn && Sessions.wanted(s.session.name, which)) || s.key in bells) &&
             st - leadMs <= now + 30_000 && st > now - 10 * MIN_MS && s.key !in sent
     }
 
@@ -67,12 +69,13 @@ object Planner {
         alerts: Boolean,
         leadMs: Long,
         which: String,
+        bells: Set<String> = emptySet(),
     ): Long? {
         var best = Long.MAX_VALUE
         val all = slots(seasons).filter { !it.session.tbc }
         for (s in all) {
             val st = s.session.start
-            if (alerts && Sessions.wanted(s.session.name, which) && st - leadMs > now) best = minOf(best, st - leadMs)
+            if (((alerts && Sessions.wanted(s.session.name, which)) || s.key in bells) && st - leadMs > now) best = minOf(best, st - leadMs)
             if (st > now) best = minOf(best, st)
             if (s.session.end > now) best = minOf(best, s.session.end + 1000)
         }

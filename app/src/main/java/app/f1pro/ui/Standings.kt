@@ -124,6 +124,10 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 item { FavouriteCard(state, fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) { favRow?.let { Haptics.tap(hv); state.sheetDriver = it } } }
             }
 
+            if (st != null && st.drivers.isNotEmpty()) {
+                item(key = "title-fight") { TitleFightCard(state, st) }
+            }
+
             if (state.standingsHint && st != null) {
                 item { StandingsHint { state.dismissStandingsHint() } }
             }
@@ -193,21 +197,32 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     }
 }
 
+/** Size of the code chip: fixed, so every code lines up and the flag below can match it. */
+val CodeChipWidth = 54.dp
+val CodeChipHeight = 28.dp
+private val CodeChipSmallWidth = 42.dp
+private val CodeChipSmallHeight = 22.dp
+
 /**
- * The driver's three-letter code ("NOR") on a rounded chip in team colour, with black or
- * white text, whichever reads better on that colour.
+ * The driver's three-letter code ("NOR") on a rounded chip in team colour, black or white
+ * text, whichever reads better. A fixed size that fits the widest codes (W, M) in Orbitron.
  */
 @Composable
 fun CodeChip(code: String, color: Color, large: Boolean = true) {
     val ink = if (contrast(Color.White, color) >= contrast(Color(0xFF0C0F1A), color)) Color.White else Color(0xFF0C0F1A)
     Box(
         Modifier
-            .clip(RoundedCornerShape(if (large) 9.dp else 7.dp))
-            .background(color)
-            .padding(horizontal = if (large) 9.dp else 7.dp, vertical = if (large) 7.dp else 4.dp),
+            .size(if (large) CodeChipWidth else CodeChipSmallWidth, if (large) CodeChipHeight else CodeChipSmallHeight)
+            .clip(RoundedCornerShape(if (large) 7.dp else 6.dp))
+            .background(color),
         contentAlignment = Alignment.Center,
     ) {
-        Text(code, style = orbitron(if (large) 14.sp else 11.sp, FontWeight.Black, ink, 0.06f), maxLines = 1)
+        Text(
+            code.take(3),
+            style = orbitron(if (large) 12.sp else 10.sp, FontWeight.Black, ink, 0.02f),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -240,7 +255,11 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, onDrive
     ) {
         Text(d.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted), modifier = Modifier.width(24.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.width(54.dp), contentAlignment = Alignment.Center) { CodeChip(d.code, color) }
+        // Code chip with the flag the same size, lined up underneath.
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            CodeChip(d.code, color)
+            Flag(Countries.code(d.nationality), CodeChipWidth, CodeChipHeight, 7.dp)
+        }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.Bottom) {
@@ -255,9 +274,9 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, onDrive
             // The team pill: its own target, opens the team.
             Row(
                 Modifier
-                    .clip(RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(color.copy(alpha = 0.15f))
-                    .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(50))
+                    .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
                     .tap(onClick = onTeam)
                     .semantics { contentDescription = "${d.teamName}. Opens the team." }
                     .padding(horizontal = 8.dp, vertical = 3.dp),
@@ -335,7 +354,7 @@ private fun TeamCard(
                     .padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) { CodeChip(d.code, color, large = false) }
+                CodeChip(d.code, color, large = false)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(d.name, style = inter(11.sp, color = C.TextSecondary), maxLines = 1)

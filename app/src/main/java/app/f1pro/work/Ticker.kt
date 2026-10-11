@@ -29,7 +29,7 @@ object Ticker {
         val app = context.applicationContext
         val prefs = Prefs(app)
         val seasons = Repo(app).seasons()
-        val at = Planner.nextWake(seasons, now, prefs.alertsOn, prefs.leadMinutes * MIN_MS, prefs.alertWhich)
+        val at = Planner.nextWake(seasons, now, prefs.alertsOn, prefs.leadMinutes * MIN_MS, prefs.alertWhich, prefs.sessionBells)
         val am = app.getSystemService(AlarmManager::class.java) ?: return
         val pi = PendingIntent.getBroadcast(
             app, REQUEST, Intent(app, TickReceiver::class.java),

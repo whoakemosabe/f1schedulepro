@@ -1,5 +1,7 @@
 package app.f1pro.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.SeekableTransitionState
@@ -498,6 +500,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
         if (!race.isTesting && status != RaceStatus.UPCOMING) state.loadResults(race)
     }
     val forecast = state.weather[race.circuit.id]?.takeIf { status != RaceStatus.COMPLETED }
+    var bellNote by remember { mutableStateOf<BellNote?>(null) }
     val raceResults = state.results[race.key]?.race.orEmpty()
 
     Column(
@@ -621,6 +624,9 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
 
         // Below the hero, the cards arrive one by one as the race card opens into the page.
         var order = 1
+        // After qualifying, until the race is run: the grid it set.
+        val quali = state.results[race.key]?.quali.orEmpty()
+        if (!race.isTesting && quali.isNotEmpty() && raceResults.isEmpty()) Box(Modifier.enterStagger(order++)) { GridCard(state, race, quali) }
         if (!race.isTesting && status != RaceStatus.UPCOMING) Box(Modifier.enterStagger(order++)) { ResultsCard(state, race, now) }
         if (forecast != null) Box(Modifier.enterStagger(order++)) { WeatherCard(state, race, forecast) }
         if (!race.isTesting) Box(Modifier.enterStagger(order++)) { TrackCard(race.circuit.id, race.circuit.name) }
@@ -707,14 +713,101 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
                     if (wh != null) {
                         Spacer(Modifier.width(10.dp))
                         WeatherChip(state, wh)
-                    } else if (!isPast && !isLive) {
-                        Spacer(Modifier.width(8.dp))
-                        Ic(R.drawable.lc_clock, C.TextMuted.copy(alpha = 0.3f), 13.dp)
+                    }
+                    // A bell for this one session (future sessions with a time).
+                    if (!isPast && !isLive && !s.tbc) {
+                        Spacer(Modifier.width(4.dp))
+                        SessionBell(state, race, s.name) { msg -> bellNote = msg }
                     }
                 }
             }
+            // "Qualifying reminder set" with Undo, for a few seconds after a bell is tapped.
+            androidx.compose.animation.AnimatedVisibility(bellNote != null) {
+                val note = bellNote
+                Row(
+                    Modifier.fillMaxWidth().background(C.SurfaceLight).padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(note?.text.orEmpty(), style = inter(12.sp, color = C.Text), modifier = Modifier.weight(1f))
+                    if (note?.undo != null) {
+                        Box(
+                            Modifier.heightIn(min = 44.dp).tap { note.undo.invoke(); bellNote = null }.padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("Undo", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
+                    } else {
+                        Spacer(Modifier.height(44.dp))
+                    }
+                }
+            }
+            LaunchedEffect(bellNote) { if (bellNote != null) { kotlinx.coroutines.delay(4000); bellNote = null } }
+            Text(
+                "Bells add single sessions on top of your usual reminder setting.",
+                style = inter(11.sp, color = C.TextMuted),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            )
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** The confirmation under the session list after a bell tap. */
+private class BellNote(val text: String, val undo: (() -> Unit)?)
+
+/**
+ * The bell on one session row. Filled red: its own reminder is on. Blue outline: your usual
+ * Notifications setting already covers it. Grey: off. Asks for notification permission the
+ * first time if needed.
+ */
+@Composable
+private fun SessionBell(state: AppState, race: Race, session: String, note: (BellNote) -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val context = LocalContext.current
+    val key = app.f1pro.data.Slot(race, race.sessions.first { it.name == session }).key
+    val own = key in state.bells
+    val usual = state.remindedAnyway(session)
+    val lead = state.leadMinutes
+    fun flip() {
+        val on = state.toggleBell(key)
+        if (on) Haptics.confirm(view) else Haptics.tap(view)
+        note(
+            BellNote(
+                if (on) "$session reminder set, $lead min before" else "$session reminder off",
+                undo = { state.toggleBell(key) },
+            )
+        )
+    }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) flip() else note(BellNote("Allow notifications for F1 Pro to get reminders", null)) }
+    val color = when {
+        own -> C.AccentText
+        usual -> C.Highlight
+        else -> C.TextMuted
+    }
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (own) C.Accent.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (own) C.AccentText.copy(alpha = 0.5f) else C.GlassBorder, RoundedCornerShape(10.dp))
+            .tap {
+                when {
+                    usual && !own -> note(BellNote("Already reminded by your Notifications setting", null))
+                    !own && !app.f1pro.work.Alerts.canNotify(context) && android.os.Build.VERSION.SDK_INT >= 33 ->
+                        ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    else -> flip()
+                }
+            }
+            .semantics {
+                contentDescription = when {
+                    own -> "$session reminder on. Tap to turn off"
+                    usual -> "$session: reminded by your Notifications setting"
+                    else -> "Remind me before $session"
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Ic(if (own || usual) R.drawable.lc_bell else R.drawable.lc_bell_off, color, 18.dp)
     }
 }
 

@@ -58,8 +58,9 @@ object Alerts {
     /** Sends any reminders that are due and remembers them so each fires once. */
     fun fireDue(context: Context, seasons: List<SeasonCalendar>, now: Long = System.currentTimeMillis()) {
         val prefs = Prefs(context)
-        if (!prefs.alertsOn || !canNotify(context)) return
-        val due = Planner.dueReminders(seasons, now, prefs.leadMinutes * MIN_MS, prefs.alertWhich, prefs.sentReminders)
+        val bells = prefs.sessionBells
+        if ((!prefs.alertsOn && bells.isEmpty()) || !canNotify(context)) return
+        val due = Planner.dueReminders(seasons, now, prefs.leadMinutes * MIN_MS, prefs.alertWhich, prefs.sentReminders, bells, prefs.alertsOn)
         if (due.isEmpty()) return
         createChannels(context)
         val fmt = Fmt(prefs.zone(), prefs.is24h(context))
