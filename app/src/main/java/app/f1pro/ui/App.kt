@@ -1,11 +1,8 @@
 package app.f1pro.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +41,23 @@ fun F1App(state: AppState) {
         if (state.openRaceKey != null) state.tab = Tab.Schedule
     }
 
+    // Tabs live in a pager: the tab bar (or a notification) moves it, and a swipe sets the tab.
+    val tabs = Tab.entries
+    val pager = rememberPagerState(initialPage = tabs.indexOf(state.tab)) { tabs.size }
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(state.tab) {
+        val i = tabs.indexOf(state.tab)
+        if (pager.currentPage != i || pager.targetPage != i) pager.animateScrollToPage(i)
+    }
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.settledPage }.collect { i ->
+            if (tabs[i] != state.tab) {
+                Haptics.segment(view)
+                state.tab = tabs[i]
+            }
+        }
+    }
+
     // The page (background + content) is recorded so the header and tab bar can blur it.
     val pageBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
@@ -57,14 +71,15 @@ fun F1App(state: AppState) {
             Box(Modifier.fillMaxSize().layerBackdrop(pageBackdrop)) {
                 F1Background(Modifier.fillMaxSize())
                 CompositionLocalProvider(LocalChrome provides chrome) {
-                    AnimatedContent(
-                        targetState = state.tab,
-                        transitionSpec = {
-                            (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 60 }) togetherWith fadeOut(tween(90))
-                        },
-                        label = "tab",
-                    ) { tab ->
-                        when (tab) {
+                    // Swipe left and right between tabs (not while a race page is open: there
+                    // the swipe moves between races).
+                    HorizontalPager(
+                        state = pager,
+                        modifier = Modifier.fillMaxSize(),
+                        userScrollEnabled = !(state.raceOpen && state.tab == Tab.Schedule),
+                        key = { tabs[it] },
+                    ) { page ->
+                        when (tabs[page]) {
                             Tab.Schedule -> SchedulePage(state, scheduleList)
                             Tab.Standings -> StandingsPage(state, standingsList)
                             Tab.News -> NewsPage(state, newsList)

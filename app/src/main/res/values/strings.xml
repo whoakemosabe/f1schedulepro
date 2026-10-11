@@ -6,4 +6,11 @@
     <string name="widget_weekend_desc">Every session of this race weekend</string>
     <string name="widget_driver_name">Your driver</string>
     <string name="widget_driver_desc">Your favourite driver\'s championship position</string>
+    <string name="shortcut_next_short">Next race</string>
+    <string name="shortcut_next_long">Open the next race</string>
+    <string name="shortcut_standings_short">Standings</string>
+    <string name="shortcut_standings_long">Championship standings</string>
+    <string name="shortcut_news_short">News</string>
+    <string name="shortcut_news_long">Latest F1 news</string>
+    <string name="tile_next_name">Next F1 session</string>
 </resources>

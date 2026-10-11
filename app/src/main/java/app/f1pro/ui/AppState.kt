@@ -75,6 +75,9 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** A race to open, from a notification tap. */
     var openRaceKey by mutableStateOf<String?>(null)
 
+    /** A race page is open on Schedule: its own swipe goes race to race, so tabs don't swipe. */
+    var raceOpen by mutableStateOf(false)
+
     // Reminder settings mirrored as state so the Settings screen redraws.
     var alertsOn by mutableStateOf(prefs.alertsOn)
         private set

@@ -27,6 +27,14 @@ import app.f1pro.work.UpdateWatch
 class MainActivity : ComponentActivity() {
     private var state: AppState? = null
     private var pendingRace: String? = null
+    private var pendingTab: app.f1pro.ui.Tab? = null
+
+    companion object {
+        /** Launcher shortcuts and the quick settings tile. */
+        const val ACTION_NEXT_RACE = "app.f1pro.NEXT_RACE"
+        const val ACTION_STANDINGS = "app.f1pro.STANDINGS"
+        const val ACTION_NEWS = "app.f1pro.NEWS"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +57,7 @@ class MainActivity : ComponentActivity() {
             val s = remember { AppState(this, scope) }
             state = s
             pendingRace?.let { s.openRaceKey = it; pendingRace = null }
+            pendingTab?.let { s.tab = it; pendingTab = null }
             if (UpdateWatch.openUpdates.value) s.tab = app.f1pro.ui.Tab.Settings
             // Theme: Dark, Light, or follow the phone. Set before anything reads the palette.
             val systemDark = isSystemInDarkTheme()
@@ -76,6 +85,11 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    private fun openTab(tab: app.f1pro.ui.Tab) {
+        val s = state
+        if (s != null) s.tab = tab else pendingTab = tab
+    }
+
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         if (intent.getBooleanExtra(Alerts.EXTRA_OPEN_UPDATES, false)) {
@@ -83,6 +97,19 @@ class MainActivity : ComponentActivity() {
             UpdateWatch.openUpdates.value = true
             state?.tab = app.f1pro.ui.Tab.Settings
         }
+        when (intent.action) {
+            ACTION_NEXT_RACE -> {
+                // The weekend under way, or else the next one, from the cached calendar.
+                val race = try {
+                    app.f1pro.data.Planner.weekend(app.f1pro.data.Repo(this).seasons(), System.currentTimeMillis())
+                } catch (e: Exception) { null }
+                if (race != null) intent.putExtra(Alerts.EXTRA_RACE, race.key)
+                else openTab(app.f1pro.ui.Tab.Schedule)
+            }
+            ACTION_STANDINGS -> openTab(app.f1pro.ui.Tab.Standings)
+            ACTION_NEWS -> openTab(app.f1pro.ui.Tab.News)
+        }
+        intent.action = null
         intent.getStringExtra(Alerts.EXTRA_RACE)?.let { key ->
             intent.removeExtra(Alerts.EXTRA_RACE)
             val s = state

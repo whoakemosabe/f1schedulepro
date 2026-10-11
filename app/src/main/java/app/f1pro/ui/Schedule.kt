@@ -92,8 +92,12 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     state.teamColoursVersion // redraw podium stripes when the official team colours arrive
 
     val sel = selected
-    if (sel != null && sel in races.indices) {
-        BackHandler { selected = null }
+    val open = sel != null && sel in races.indices
+    androidx.compose.runtime.SideEffect { state.raceOpen = open }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { state.raceOpen = false } }
+    if (sel != null && open) {
+        // Only while Schedule is the tab showing: the pager may keep this page around off screen.
+        BackHandler(enabled = state.tab == Tab.Schedule) { selected = null }
         RaceDetailPager(state, races, sel, globalNext?.session?.start, onBack = { selected = null })
         return
     }

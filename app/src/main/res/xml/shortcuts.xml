@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon. Each opens MainActivity with an action it understands. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="next_race"
+        android:enabled="true"
+        android:icon="@drawable/sc_next"
+        android:shortcutShortLabel="@string/shortcut_next_short"
+        android:shortcutLongLabel="@string/shortcut_next_long">
+        <intent
+            android:action="app.f1pro.NEXT_RACE"
+            android:targetClass="app.f1pro.MainActivity"
+            android:targetPackage="app.f1pro" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="standings"
+        android:enabled="true"
+        android:icon="@drawable/sc_standings"
+        android:shortcutShortLabel="@string/shortcut_standings_short"
+        android:shortcutLongLabel="@string/shortcut_standings_long">
+        <intent
+            android:action="app.f1pro.STANDINGS"
+            android:targetClass="app.f1pro.MainActivity"
+            android:targetPackage="app.f1pro" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="news"
+        android:enabled="true"
+        android:icon="@drawable/sc_news"
+        android:shortcutShortLabel="@string/shortcut_news_short"
+        android:shortcutLongLabel="@string/shortcut_news_long">
+        <intent
+            android:action="app.f1pro.NEWS"
+            android:targetClass="app.f1pro.MainActivity"
+            android:targetPackage="app.f1pro" />
+    </shortcut>
+</shortcuts>

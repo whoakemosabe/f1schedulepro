@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcut icon: white Lucide glyph on an F1-red circle. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#E10600" />
+            <size android:width="48dp" android:height="48dp" />
+        </shape>
+    </item>
+    <item
+        android:drawable="@drawable/lc_trophy"
+        android:bottom="13dp"
+        android:left="13dp"
+        android:right="13dp"
+        android:top="13dp" />
+</layer-list>

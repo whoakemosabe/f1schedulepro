@@ -32,7 +32,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Quick settings tile: the next session and how long until it starts. -->
+        <service
+            android:name=".work.NextSessionTile"
+            android:exported="true"
+            android:icon="@drawable/lc_flag"
+            android:label="@string/tile_next_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".work.TickReceiver"
