@@ -1,27 +1,13 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+*.apk
 
-# Claude Code
-.claude/
+# Signing keys never go in the repo (CI reads them from secrets)
+signing/
+*.p12
+*.jks
+*.keystore

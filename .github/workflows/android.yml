@@ -1,12 +1,13 @@
 name: Android APK
 
-# Builds the native app in android/. Pushes to main publish a signed release (v2.0.N) with
-# f1pro.apk attached; other branches are build checks. The PWA at the repo root is untouched.
+# Pushes to main publish a signed release (v2.0.N) with f1pro.apk attached; other branches are
+# build checks. Docs-only changes don't build.
 on:
   push:
-    paths:
-      - "android/**"
-      - ".github/workflows/android.yml"
+    branches: ["**"]
+    paths-ignore:
+      - "**.md"
+      - "licenses/**"
   workflow_dispatch:
 
 permissions:
@@ -15,10 +16,6 @@ permissions:
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
-
-defaults:
-  run:
-    working-directory: android
 
 jobs:
   build:
@@ -86,7 +83,7 @@ jobs:
         shell: bash
         run: |
           { grep -E "^e: |error:|ERROR|expected:<|Exception at|FAILED$" build.log; grep -A 10 "What went wrong" build.log; } \
-            | grep -v "^--$" | sed 's#file:///home/runner/work/[^/]*/[^/]*/android/##' | sed 's#/home/runner/work/[^/]*/[^/]*/android/##' \
+            | grep -v "^--$" | sed 's#file:///home/runner/work/[^/]*/[^/]*/##' | sed 's#/home/runner/work/[^/]*/[^/]*/##' \
             | awk 'NF && !seen[$0]++' > errors.txt || true
           { echo '### Build errors'; echo '```'; head -200 errors.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           sed -n '1,10p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
@@ -116,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: f1pro-apk
-          path: android/f1pro.apk
+          path: f1pro.apk
           retention-days: 14
 
       - name: Release notes
@@ -135,6 +132,6 @@ jobs:
         with:
           tag_name: v2.0.${{ github.run_number }}
           name: F1 Schedule Pro 2.0.${{ github.run_number }}
-          body_path: android/notes.md
-          files: android/f1pro.apk
+          body_path: notes.md
+          files: f1pro.apk
           make_latest: true
