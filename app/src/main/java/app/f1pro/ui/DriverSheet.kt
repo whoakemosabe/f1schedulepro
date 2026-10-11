@@ -226,7 +226,7 @@ private fun DriverPanel(state: AppState, st: Standings, d: DriverStanding, activ
                     when {
                         career != null -> CareerBox(career)
                         careerId != null && state.careerFailed[careerId] == true -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Couldn't load career stats.", style = inter(12.sp, color = C.TextMuted), modifier = Modifier.weight(1f))
+                            Text(state.careerError[careerId] ?: "Couldn't load career stats.", style = inter(12.sp, color = C.TextMuted), modifier = Modifier.weight(1f))
                             Chip("Retry", icon = R.drawable.lc_refresh_cw, iconColor = C.AccentText) { state.loadCareer(careerId, st.season, retry = true) }
                         }
                         careerId == null && !loading -> Text("Career stats show once they've raced this season.", style = inter(12.sp, color = C.TextMuted))

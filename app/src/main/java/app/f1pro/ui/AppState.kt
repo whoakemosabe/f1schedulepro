@@ -227,36 +227,36 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** Career totals that couldn't be loaded (shown with a Retry instead of a skeleton). */
     val careerFailed = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
 
+    /** Why a driver's career couldn't load (shown with Retry). */
+    val careerError = androidx.compose.runtime.mutableStateMapOf<String, String>()
+
     fun loadCareer(driverId: String, season: Int, retry: Boolean = false) {
         if (careers.containsKey(driverId) || !careerLoading.add(driverId)) return
         if (!retry && careerFailed[driverId] == true) { careerLoading.remove(driverId); return }
         careerFailed.remove(driverId)
+        careerError.remove(driverId)
         scope.launch {
             try {
                 val now = System.currentTimeMillis()
                 val races = seasons.firstOrNull { it.year == season }?.races.orEmpty()
                 val over = races.isNotEmpty() && races.all { (it.raceSession?.end ?: 0L) < now }
-                val c = repo.driverCareer(driverId, season, over, lastRaceEnd(season))
+                val current = driverSeasons.values.firstOrNull { it.driverId == driverId && it.season == season }
+                // Never a spinner forever: give up after 40 s and offer Retry.
+                val c = kotlinx.coroutines.withTimeout(40_000) { repo.driverCareer(driverId, season, over, current) }
                 if (c != null) careers[driverId] = c else careerFailed[driverId] = true
+            } catch (e: app.f1pro.data.Net.TooManyRequests) {
+                val mins = ((app.f1pro.data.Net.jolpicaBlockedUntil - System.currentTimeMillis()) / 60_000L + 1).coerceAtLeast(1)
+                careerError[driverId] = "The results service has had too many requests. Try again in about $mins min."
+                careerFailed[driverId] = true
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                careerError[driverId] = "The results service is slow right now."
+                careerFailed[driverId] = true
             } catch (e: Exception) {
+                careerError[driverId] = "Couldn't reach the results service."
                 careerFailed[driverId] = true
             } finally {
                 careerLoading.remove(driverId)
             }
-        }
-    }
-
-    /** circuitId-driverId → that driver's record at the track. */
-    val trackRecords = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.TrackRecord>()
-    private val trackLoading = HashSet<String>()
-
-    fun loadTrackRecord(circuitId: String, driverId: String) {
-        val k = "$circuitId-$driverId"
-        if (trackRecords.containsKey(k) || !trackLoading.add(k)) return
-        scope.launch {
-            val season = standings?.season
-            try { repo.trackRecord(circuitId, driverId, season?.let { lastRaceEnd(it) })?.let { trackRecords[k] = it } } catch (e: Exception) { }
-            finally { trackLoading.remove(k) }
         }
     }
 

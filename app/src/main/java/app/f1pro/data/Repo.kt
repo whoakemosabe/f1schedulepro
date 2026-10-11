@@ -37,17 +37,31 @@ object Net {
      * GET as text. Follows redirects itself (up to 5), including 307/308 and http↔https hops,
      * which HttpURLConnection won't always do: feeds like RACER's answer with a 308 move.
      */
+    /** Until when Jolpica has asked us to stop (its hourly limit): requests fail at once until then. */
+    @Volatile var jolpicaBlockedUntil = 0L
+        private set
+
     fun get(url: String, accept: String = "*/*"): String {
         val jolpica = url.contains("jolpi.ca")
         var attempt = 0
         while (true) {
-            if (jolpica) paceJolpica()
+            if (jolpica) {
+                val wait = jolpicaBlockedUntil - System.currentTimeMillis()
+                if (wait > 0) throw TooManyRequests(wait)
+                paceJolpica()
+            }
             try {
                 return getOnce(url, accept)
             } catch (e: TooManyRequests) {
-                if (!jolpica || attempt >= 3) throw e
+                if (!jolpica) throw e
+                // A short wait (the per-second limit): wait and retry once or twice. A long one
+                // (the hourly limit): stop asking until then and fail straight away.
+                if (e.retryAfterMs > 10_000L || attempt >= 2) {
+                    jolpicaBlockedUntil = System.currentTimeMillis() + e.retryAfterMs.coerceAtLeast(10_000L)
+                    throw e
+                }
                 attempt++
-                Thread.sleep(e.retryAfterMs.coerceIn(1000L, 15_000L))
+                Thread.sleep(e.retryAfterMs.coerceIn(1000L, 5_000L))
             }
         }
     }
@@ -354,46 +368,25 @@ class Repo(context: Context) {
     }
 
     /**
-     * Career totals for a Jolpica driver id: a handful of small queries, one after another
-     * ([Net] paces them). Each figure is independent: one that fails is left out rather than
-     * losing the lot. Cached for 3 days. Titles come from [champions].
+     * Career totals: the driver's whole race history and front-row list, fetched once per
+     * season and kept (past seasons never change), plus this season from [current]. A few
+     * requests the first time a driver is opened in a season, none after that.
      */
-    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean, lastRaceEnd: Long? = null): DriverCareer? = withContext(Dispatchers.IO) {
-        val f = File(dir, "career2-$id.json")
-        val cached = try { JSONObject(f.readText()) } catch (e: Exception) { null }
-        val fresh = cached != null && System.currentTimeMillis() - f.lastModified() < 3 * 24 * HOUR_MS &&
-            !stale(f.lastModified(), lastRaceEnd)
-        val o = if (fresh) cached!! else JSONObject()
-        if (!fresh) {
-            val base = "$JOLPICA/drivers/$id"
-            for ((k, url) in listOf(
-                "driver" to "$base.json",
-                "seasons" to "$base/seasons.json?limit=100",
-                "starts" to "$base/results.json?limit=1",
-                "p1" to "$base/results/1.json?limit=1",
-                "p2" to "$base/results/2.json?limit=1",
-                "p3" to "$base/results/3.json?limit=1",
-                "poles" to "$base/qualifying/1.json?limit=1",
-            )) {
-                try { o.put(k, Net.get(url, "application/json")) } catch (e: Exception) { cached?.optString(k)?.takeIf { it.isNotBlank() }?.let { o.put(k, it) } }
+    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean, current: DriverSeason?): DriverCareer? = withContext(Dispatchers.IO) {
+        val f = File(dir, "career3-$id-$currentSeason.json")
+        fun pages(o: JSONObject, k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        val saved = try { JSONObject(f.readText()) } catch (e: Exception) { null }
+        val o = saved ?: run {
+            val results = allPages("$JOLPICA/drivers/$id/results.json")
+            val poles = try { allPages("$JOLPICA/drivers/$id/qualifying/1.json") } catch (e: Net.TooManyRequests) { throw e } catch (e: Exception) { emptyList() }
+            fun arr(l: List<String>) = org.json.JSONArray().apply { l.forEach { put(it) } }
+            JSONObject().put("results", arr(results)).put("poles", arr(poles)).also {
+                try { f.writeText(it.toString()) } catch (e: Exception) { }
             }
-            if (o.length() > 0) try { f.writeText(o.toString()) } catch (e: Exception) { }
         }
-        if (o.length() == 0) return@withContext null
-        fun total(k: String) = o.optString(k).takeIf { it.isNotBlank() }?.let { try { DriverStats.total(it) } catch (e: Exception) { null } }
-        val seasons = o.optString("seasons").takeIf { it.isNotBlank() }?.let { try { DriverStats.seasons(it) } catch (e: Exception) { null } }.orEmpty()
-        val podiums = listOf(total("p1"), total("p2"), total("p3")).takeIf { l -> l.all { it != null } }?.sumOf { it!! }
-        val champs = champions(seasons.filter { it < currentSeason || (it == currentSeason && seasonOver) })
-        DriverCareer(
-            dateOfBirth = o.optString("driver").takeIf { it.isNotBlank() }?.let { DriverStats.dateOfBirth(it) },
-            seasons = seasons,
-            firstRace = o.optString("starts").takeIf { it.isNotBlank() }?.let { try { DriverStats.firstRace(it) } catch (e: Exception) { null } },
-            starts = total("starts"),
-            wins = total("p1"),
-            podiums = podiums,
-            poles = total("poles"),
-            titles = champs?.let { m -> m.filterValues { it == id }.keys.sorted() },
-        )
+        val partial = DriverStats.career(pages(o, "results"), pages(o, "poles"), currentSeason, current, null)
+        val champs = champions(partial.seasons.filter { it < currentSeason || (it == currentSeason && seasonOver) })
+        partial.copy(titles = champs?.let { m -> m.filterValues { it == id }.keys.sorted() })
     }
 
     /**

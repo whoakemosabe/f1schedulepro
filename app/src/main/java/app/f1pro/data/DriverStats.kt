@@ -343,6 +343,61 @@ object DriverStats {
      */
     fun pointsLeft(racesLeft: Int, sprintsLeft: Int): Int = racesLeft * 25 + sprintsLeft * 8
 
+    /**
+     * Career totals from a driver's whole race history (/drivers/{id}/results, all pages) and
+     * their front-row list (/drivers/{id}/qualifying/1, which also returns non-pole rows, so
+     * only position 1 counts). Seasons before [currentSeason] come from those pages (they
+     * never change); this season comes from [current], the season data already downloaded.
+     */
+    fun career(
+        resultsPages: List<String>,
+        polesPages: List<String>,
+        currentSeason: Int,
+        current: DriverSeason?,
+        titles: List<Int>?,
+    ): DriverCareer {
+        var starts = 0; var wins = 0; var podiums = 0
+        val seasons = sortedSetOf<Int>()
+        var first: Pair<Pair<Int, Int>, String>? = null
+        var dob: java.time.LocalDate? = null
+        for (page in resultsPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) {
+                val r = rs.getJSONObject(i)
+                val season = r.optString("season").toIntOrNull() ?: continue
+                val round = r.optString("round").toIntOrNull() ?: 0
+                val res = r.optJSONArray("Results")?.optJSONObject(0) ?: continue
+                if (dob == null) dob = res.optJSONObject("Driver")?.optString("dateOfBirth")?.takeIf { it.isNotBlank() }
+                    ?.let { try { java.time.LocalDate.parse(it) } catch (e: Exception) { null } }
+                if (first == null || (season to round).let { it.first < first!!.first.first || (it.first == first!!.first.first && it.second < first!!.first.second) }) {
+                    first = (season to round) to "$season ${r.optString("raceName")}"
+                }
+                if (season >= currentSeason) continue
+                seasons += season
+                starts++
+                val pos = res.optString("positionText").toIntOrNull()
+                if (pos == 1) wins++
+                if (pos != null && pos <= 3) podiums++
+            }
+        }
+        var poles = 0
+        for (page in polesPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) {
+                val r = rs.getJSONObject(i)
+                val season = r.optString("season").toIntOrNull() ?: continue
+                if (season >= currentSeason) continue
+                if (r.optJSONArray("QualifyingResults")?.optJSONObject(0)?.optString("position") == "1") poles++
+            }
+        }
+        if (current != null && current.rounds.isNotEmpty()) {
+            seasons += currentSeason
+            starts += current.rounds.count { it.status != "Did not start" }
+            wins += current.rounds.count { it.finish == 1 }
+            podiums += current.podiums
+            poles += current.poles
+        }
+        return DriverCareer(dob, seasons.toList(), first?.second, starts, wins, podiums, poles, titles)
+    }
+
     // ── Headshots (OpenF1) ──
 
     /** Family name (normalised) → official headshot URL, from OpenF1's /drivers. */

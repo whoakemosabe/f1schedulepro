@@ -148,4 +148,29 @@ class DriverStatsTest {
         assertEquals(6.0, a.rounds[1].sprintPoints, 0.0)
         assertEquals(31.0, a.totalPoints, 0.0)
     }
+
+    @Test
+    fun careerFromHistoryPlusThisSeason() {
+        fun race(season: Int, round: Int, pos: String) =
+            """{"season":"$season","round":"$round","raceName":"GP $season-$round","Results":[{"positionText":"$pos","Driver":{"dateOfBirth":"2006-08-25"}}]}"""
+        val history = """{"MRData":{"total":"5","RaceTable":{"Races":[${race(2025, 1, "1")},${race(2025, 2, "3")},${race(2025, 3, "R")},${race(2026, 1, "2")},${race(2026, 2, "1")}]}}}"""
+        // qualifying/1 also returns non-pole rows: only position 1 counts.
+        val poles = """{"MRData":{"RaceTable":{"Races":[
+            {"season":"2025","QualifyingResults":[{"position":"1"}]},
+            {"season":"2025","QualifyingResults":[{"position":"4"}]},
+            {"season":"2026","QualifyingResults":[{"position":"1"}]}]}}}"""
+        val now = DriverStats.seasonAll(2026, listOf("""{"MRData":{"RaceTable":{"Races":[
+            {"round":"1","raceName":"R1","Results":[{"position":"2","positionText":"2","points":"18","Driver":{"driverId":"a","givenName":"A","familyName":"Aa"}}]},
+            {"round":"2","raceName":"R2","Results":[{"position":"1","positionText":"1","points":"25","Driver":{"driverId":"a","givenName":"A","familyName":"Aa"}}]}]}}}"""),
+            listOf("""{"MRData":{"RaceTable":{"Races":[{"round":"2","QualifyingResults":[{"position":"1","Driver":{"driverId":"a"}}]}]}}}"""), emptyList()).drivers.getValue("a")
+        val c = DriverStats.career(listOf(history), listOf(poles), 2026, now, listOf(2025))
+        assertEquals(5, c.starts)
+        assertEquals(2, c.wins)
+        assertEquals(4, c.podiums)
+        assertEquals(2, c.poles)
+        assertEquals(listOf(2025, 2026), c.seasons)
+        assertEquals("2025 GP 2025-1", c.firstRace)
+        assertEquals(java.time.LocalDate.of(2006, 8, 25), c.dateOfBirth)
+        assertEquals(listOf(2025), c.titles)
+    }
 }
