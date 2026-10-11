@@ -32,9 +32,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.lens
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -273,9 +270,8 @@ fun openUrl(context: Context, url: String) {
 }
 
 /**
- * Glass track with a red glass pill that glides (and slightly overshoots) to the chosen option,
- * like the segment rows in Ljós. The pill is a lens over the labels beneath it, so its rim bends
- * them as it slides (Android 13+); labels fade from muted to white as the pill passes.
+ * Glass track with a red pill that glides (and slightly overshoots) to the chosen option,
+ * like the segment rows in Ljós. Labels fade between muted and white as the pill passes.
  */
 @Composable
 fun SlidingSegments(
@@ -292,9 +288,6 @@ fun SlidingSegments(
         androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 380f),
         label = "segment",
     )
-    val under = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
-    val inner = height - 6.dp
-    val pill = RoundedCornerShape(9.dp)
     androidx.compose.foundation.layout.BoxWithConstraints(
         modifier
             .height(height)
@@ -304,67 +297,44 @@ fun SlidingSegments(
             .padding(3.dp)
     ) {
         val segW = maxWidth / options.size
-
-        @Composable
-        fun Labels(colorFor: (Int) -> Color, mod: Modifier, clickable: Boolean) {
-            Row(mod.fillMaxWidth().height(inner)) {
-                options.forEachIndexed { i, label ->
-                    val color = colorFor(i)
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .height(inner)
-                            .then(
-                                if (clickable) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    if (i != selected) Haptics.segment(view)
-                                    onSelect(i)
-                                } else Modifier
-                            ),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        icons?.getOrNull(i)?.let {
-                            Ic(it, color, 14.dp)
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Text(
-                            label,
-                            style = inter(13.sp, androidx.compose.ui.text.font.FontWeight.SemiBold, color, 0.02f),
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
-        }
-
-        // What the pill bends: the muted labels, recorded as its backdrop.
-        Labels({ C.TextSecondary }, Modifier.layerBackdrop(under), clickable = false)
-        // The pill itself: red glass with a lens rim.
         Box(
             Modifier
                 .offset(x = segW * pos)
                 .width(segW)
-                .height(inner)
-                .drawBackdrop(
-                    backdrop = under,
-                    shape = { pill },
-                    effects = {
-                        lens(8.dp.toPx(), 14.dp.toPx(), depthEffect = true, chromaticAberration = true)
-                    },
-                    highlight = { com.kyant.backdrop.highlight.Highlight(style = com.kyant.backdrop.highlight.HighlightStyle.Default(angle = 45f)) },
-                    shadow = { com.kyant.backdrop.shadow.Shadow(radius = 8.dp, color = C.Accent.copy(alpha = 0.35f)) },
-                    onDrawSurface = {
-                        drawRect(Brush.horizontalGradient(listOf(C.Accent.copy(alpha = 0.88f), C.AccentGlow.copy(alpha = 0.88f))))
-                    },
-                )
+                .height(height - 6.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Brush.horizontalGradient(listOf(C.Accent, C.AccentGlow)))
         )
-        // White labels where the pill is; they take the taps.
-        Labels({ i ->
-            val closeness = (1f - kotlin.math.abs(pos - i)).coerceIn(0f, 1f)
-            Color.White.copy(alpha = closeness)
-        }, Modifier, clickable = true)
+        Row(Modifier.fillMaxWidth().height(height - 6.dp)) {
+            options.forEachIndexed { i, label ->
+                val closeness = (1f - kotlin.math.abs(pos - i)).coerceIn(0f, 1f)
+                val color = androidx.compose.ui.graphics.lerp(C.TextMuted, Color.White, closeness)
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(height - 6.dp)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (i != selected) Haptics.segment(view)
+                            onSelect(i)
+                        },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    icons?.getOrNull(i)?.let {
+                        Ic(it, color, 14.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        label,
+                        style = inter(13.sp, androidx.compose.ui.text.font.FontWeight.SemiBold, color, 0.02f),
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
     }
 }
+
 
 /** Lays children left to right and wraps to a new line when a row is full. */
 @Composable
@@ -397,7 +367,7 @@ fun Wrap(gap: Dp, rowGap: Dp = gap, modifier: Modifier = Modifier, content: @Com
     }
 }
 
-/** Pull-to-refresh whose spinner appears below the floating glass header. */
+/** Pull-to-refresh whose spinner appears below the frosted header. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun RefreshBox(
@@ -425,7 +395,10 @@ fun RefreshBox(
     )
 }
 
-/** The page's own padding plus room for the floating header and tab bar. */
+/** Height of the row at the top of a page (legend, section title, back and arrows). */
+val SectionRowHeight = 40.dp
+
+/** The page's own padding plus room for the header and tab bar. The same on every page. */
 @Composable
 fun pagePadding(horizontal: Dp = 12.dp, top: Dp = 12.dp, bottom: Dp = 12.dp): androidx.compose.foundation.layout.PaddingValues {
     val chrome = LocalChrome.current

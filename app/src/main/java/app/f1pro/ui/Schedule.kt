@@ -139,7 +139,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     ) {
         item {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                Modifier.fillMaxWidth().height(SectionRowHeight).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -315,13 +315,15 @@ private fun RaceDetailPager(
     }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding()),
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding()).height(SectionRowHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 Modifier
-                    .heightIn(min = 40.dp)
-                    .glassButton(RoundedCornerShape(50))
+                    .height(SectionRowHeight)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(C.SurfaceLight.copy(alpha = 0.5f))
+                    .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
                     .tap(onClick = onBack)
                     .padding(start = 8.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -354,9 +356,11 @@ private fun RaceDetailPager(
 private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(SectionRowHeight)
             .alpha(if (enabled) 1f else 0.3f)
-            .glassButton(RoundedCornerShape(50))
+            .clip(RoundedCornerShape(12.dp))
+            .background(C.SurfaceLight.copy(alpha = 0.5f))
+            .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
             .tap(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Ic(icon, C.TextMuted, 18.dp) }
@@ -394,7 +398,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 16.dp + LocalChrome.current.calculateBottomPadding()),
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + LocalChrome.current.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Hero

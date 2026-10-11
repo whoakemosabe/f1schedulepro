@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -125,7 +126,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                     }
                 }
                 item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().height(SectionRowHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("LATEST NEWS", style = SectionLabel)
                         if (items.isNotEmpty()) {
                             Spacer(Modifier.width(8.dp))

@@ -44,8 +44,7 @@ fun F1App(state: AppState) {
         if (state.openRaceKey != null) state.tab = Tab.Schedule
     }
 
-    // Two recordings for the glass: the background alone, and background + page.
-    val bgBackdrop = rememberLayerBackdrop()
+    // The page (background + content) is recorded so the header and tab bar can blur it.
     val pageBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
     var topPx by remember { mutableIntStateOf(0) }
@@ -54,10 +53,10 @@ fun F1App(state: AppState) {
 
     CompositionLocalProvider(LocalFmt provides state.fmt) {
         Box(Modifier.fillMaxSize()) {
-            // The page scrolls under the floating header and tab bar.
+            // The page scrolls under the frosted header and tab bar.
             Box(Modifier.fillMaxSize().layerBackdrop(pageBackdrop)) {
-                F1Background(Modifier.fillMaxSize().layerBackdrop(bgBackdrop))
-                CompositionLocalProvider(LocalBgBackdrop provides bgBackdrop, LocalChrome provides chrome) {
+                F1Background(Modifier.fillMaxSize())
+                CompositionLocalProvider(LocalChrome provides chrome) {
                     AnimatedContent(
                         targetState = state.tab,
                         transitionSpec = {

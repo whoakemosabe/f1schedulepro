@@ -36,21 +36,15 @@ import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.Shadow
 
 /*
- * Liquid glass on Kyant's Backdrop 2.x, the same library and recipe as Afli. The page behind is
- * recorded with layerBackdrop and redrawn through a short chain: a touch more colour, a frost,
- * and the library's lens, which bends a rounded edge with depth and colour fringing. The lens
- * and the dissolve need Android 13; on older phones Kyant skips them and the tint is made
- * stronger so text stays readable.
- *
- * Two recordings: [LocalPageBackdrop] is the background plus the scrolling page (for the header
- * and the floating tab bar, which float over content), [LocalBgBackdrop] is the background
- * alone (for controls that sit inside the page and must not refract themselves).
+ * Frosted glass on Kyant's Backdrop 2.x, the same library as Afli. The page is recorded with
+ * layerBackdrop ([LocalPageBackdrop]) and redrawn blurred behind the header and the tab bar, so
+ * content scrolls underneath both. The dissolve needs Android 13; on older phones Kyant skips
+ * it and the tint is made stronger so text stays readable.
  */
 
 val glassFull: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
 val LocalPageBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
-val LocalBgBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 /** Space the floating header (top) and tab bar (bottom) take, for pages to pad their content. */
 val LocalChrome = staticCompositionLocalOf { androidx.compose.foundation.layout.PaddingValues(0.dp) }
@@ -81,49 +75,6 @@ fun BackdropEffectScope.dissolve(fadeTop: Float, fadeBottom: Float) {
         setFloatUniform("fadeBottom", fadeBottom)
     }
 }
-
-/** Frosted glass for floating cards (the update banner, the crash card). */
-fun Modifier.glassFloat(
-    backdrop: LayerBackdrop,
-    shape: CornerBasedShape = RoundedCornerShape(16.dp),
-): Modifier = drawBackdrop(
-    backdrop = backdrop,
-    shape = { shape },
-    effects = {
-        colorControls(saturation = 1.2f)
-        blur(12.dp.toPx())
-        lens(18.dp.toPx(), 30.dp.toPx(), depthEffect = true, chromaticAberration = true)
-    },
-    highlight = { Highlight(width = 1.dp, style = HighlightStyle.Default(angle = 45f)) },
-    shadow = { Shadow(radius = 20.dp, color = Color.Black.copy(alpha = if (C.dark) 0.3f else 0.12f)) },
-    onDrawSurface = {
-        val tint = if (C.dark) Color(0xB30F1325) else Color(0xCCFFFFFF)
-        drawRect(if (glassFull) tint else tint.copy(alpha = 0.94f))
-        drawRect(Brush.verticalGradient(listOf(Color(0x14FFFFFF), Color(0x03FFFFFF))))
-    },
-)
-
-/** Barely frosted glass for the tab bar, buttons and pills: mostly lens, like iOS 26 controls. */
-fun Modifier.glassControl(
-    backdrop: LayerBackdrop,
-    shape: CornerBasedShape = RoundedCornerShape(50),
-    press: () -> Float = { 0f },
-): Modifier = drawBackdrop(
-    backdrop = backdrop,
-    shape = { shape },
-    effects = {
-        colorControls(saturation = 1.3f)
-        blur(3.dp.toPx())
-        val p = press()
-        lens((12.dp + 6.dp * p).toPx(), (24.dp + 20.dp * p).toPx(), depthEffect = true, chromaticAberration = true)
-    },
-    highlight = { Highlight(style = HighlightStyle.Default(angle = 45f)) },
-    shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = if (C.dark) 0.28f else 0.12f)) },
-    onDrawSurface = {
-        val tint = if (C.dark) Color(0x590C0F1A) else Color(0x80FFFFFF)
-        drawRect(if (glassFull) tint else (if (C.dark) Color(0xE00C0F1A) else Color(0xEBFFFFFF)))
-    },
-)
 
 /**
  * The frosted band behind the status bar and header: no lens, dissolves at the bottom. The pane
@@ -176,49 +127,55 @@ fun GlassHeader(backdrop: LayerBackdrop, height: Dp, modifier: Modifier = Modifi
     }
 }
 
-/**
- * What the glass refracts: the page colour with two soft glows, F1 red up top and timing-screen
- * cyan low down, plus faint speed lines. Static, so it costs nothing while idle.
- */
+/** The page colour behind everything (what the header and tab bar blur). */
 @Composable
 fun F1Background(modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        drawRect(C.Bg)
-        val w = size.width
-        val h = size.height
-        val strength = if (C.dark) 1f else 0.55f
-        drawCircle(
-            Brush.radialGradient(
-                listOf(C.Accent.copy(alpha = 0.24f * strength), Color.Transparent),
-                center = Offset(w * 0.1f, h * 0.06f),
-                radius = w * 0.85f,
-            ),
-            radius = w * 0.85f,
-            center = Offset(w * 0.1f, h * 0.06f),
-        )
-        drawCircle(
-            Brush.radialGradient(
-                listOf(Color(0xFF00D4FF).copy(alpha = 0.14f * strength), Color.Transparent),
-                center = Offset(w * 0.95f, h * 0.78f),
-                radius = w * 0.9f,
-            ),
-            radius = w * 0.9f,
-            center = Offset(w * 0.95f, h * 0.78f),
-        )
-        // Speed lines: long faint diagonals.
-        val line = (if (C.dark) Color.White else Color(0xFF0C0F1A)).copy(alpha = 0.025f)
-        var x = -h
-        while (x < w) {
-            drawLine(line, Offset(x, h), Offset(x + h * 0.55f, 0f), strokeWidth = 1.5f)
-            x += 56f * density
-        }
-    }
+    Canvas(modifier) { drawRect(C.Bg) }
 }
 
-/** A small glass button over the page background, with a flat fallback when there's no backdrop. */
+/**
+ * The frosted band behind the tab bar: the full width of the screen, blurred page underneath.
+ * Like [GlassHeader] it reaches [margin] past the sides and bottom with the page mirrored into
+ * that margin, so the blur doesn't pull in empty space along the edges.
+ */
 @Composable
-fun Modifier.glassButton(shape: CornerBasedShape = RoundedCornerShape(50)): Modifier {
-    val bg = LocalBgBackdrop.current
-    val base = if (bg != null) this.glassControl(bg, shape) else this.clip(shape).background(C.SurfaceLight)
-    return base.clip(shape).border(1.dp, Rim, shape)
+fun GlassBar(backdrop: LayerBackdrop, modifier: Modifier = Modifier, margin: Dp = 40.dp) {
+    val density = LocalDensity.current
+    val m = with(density) { margin.roundToPx() }
+    val box = remember { floatArrayOf(0f, 0f) }
+    Box(
+        modifier
+            .layout { measurable, constraints ->
+                box[0] = constraints.maxWidth.toFloat()
+                box[1] = constraints.maxHeight.toFloat()
+                val p = measurable.measure(Constraints.fixed(constraints.maxWidth + m * 2, constraints.maxHeight + m))
+                layout(constraints.maxWidth, constraints.maxHeight) { p.place(-m, 0) }
+            }
+            .drawPlainBackdrop(
+                backdrop = backdrop,
+                shape = { RoundedCornerShape(0.dp) },
+                effects = {
+                    colorControls(saturation = 1.2f)
+                    blur(18.dp.toPx())
+                },
+                onDrawBackdrop = { drawPage ->
+                    drawPage()
+                    val mf = m.toFloat()
+                    val right = mf + box[0]
+                    withTransform({ scale(-1f, 1f, pivot = Offset(mf, 0f)) }) { drawPage() }
+                    withTransform({ scale(-1f, 1f, pivot = Offset(right, 0f)) }) { drawPage() }
+                    withTransform({ scale(1f, -1f, pivot = Offset(0f, box[1])) }) { drawPage() }
+                },
+                onDrawSurface = {
+                    drawRect(
+                        when {
+                            C.dark && glassFull -> Color(0x8C0C0F1A)
+                            C.dark -> Color(0xEB0C0F1A)
+                            glassFull -> Color(0xA6F4F6FB)
+                            else -> Color(0xF0F4F6FB)
+                        }
+                    )
+                },
+            ),
+    )
 }
