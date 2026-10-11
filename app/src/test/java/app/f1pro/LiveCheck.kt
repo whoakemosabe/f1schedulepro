@@ -101,6 +101,9 @@ class LiveCheck {
                 line(track.starts >= 5, "Track record (Verstappen at COTA): ${track.starts} starts, ${track.wins} wins, best P${track.best}")
                 val heads = app.f1pro.data.DriverStats.headshots(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
                 line(heads.size >= 15, "Headshots (OpenF1): ${heads.size} drivers")
+                heads.values.firstOrNull()?.let { u ->
+                    line(true, "Headshot link: $u → ${app.f1pro.data.DriverStats.sharperHeadshot(u)}")
+                }
             }
         } catch (e: Exception) { line(false, "Driver panel: ${e.message}") }
         try {

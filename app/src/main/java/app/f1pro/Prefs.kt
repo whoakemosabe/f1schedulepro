@@ -44,6 +44,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("sent_reminders", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("sent_reminders", v.toSortedSet().toList().takeLast(150).toSet()).apply()
 
+    /** The "Tap a driver or team" hint on Standings has been seen (dismissed or a panel opened). */
+    var standingsHintSeen: Boolean
+        get() = p.getBoolean("standings_hint_seen", false)
+        set(v) = p.edit().putBoolean("standings_hint_seen", v).apply()
+
     var standingsView: String
         get() = p.getString("standings_view", "drivers") ?: "drivers"
         set(v) = p.edit().putString("standings_view", v).apply()

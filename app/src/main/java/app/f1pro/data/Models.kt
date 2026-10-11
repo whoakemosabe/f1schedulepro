@@ -114,8 +114,14 @@ data class DriverStanding(
     val number: String?,
     val teamId: String,
     val teamName: String,
+    /** The three-letter code ("NOR"), from the feed when it has one. */
+    val shortCode: String? = null,
 ) {
     val url: String get() = Teams.driverUrl(name, surname)
+
+    /** "NOR": the feed's code, else the first three letters of the surname (accents dropped). */
+    val code: String get() = shortCode?.takeIf { it.length == 3 }?.uppercase()
+        ?: Names.norm(surname).take(3).uppercase().ifBlank { "—" }
 }
 
 data class TeamStanding(

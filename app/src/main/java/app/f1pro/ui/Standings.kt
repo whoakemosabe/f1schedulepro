@@ -1,5 +1,9 @@
 package app.f1pro.ui
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -62,6 +66,9 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     var view by remember { mutableStateOf(state.prefs.standingsView) }
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val st = state.standings
+    LaunchedEffect(state.sheetDriver, state.sheetTeam) {
+        if (state.sheetDriver != null || state.sheetTeam != null) state.dismissStandingsHint()
+    }
     val fav = state.favourite
     state.teamColoursVersion // redraw when the official team colours arrive
     val now = rememberNow(60_000)
@@ -117,6 +124,10 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 item { FavouriteCard(state, fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) { favRow?.let { Haptics.tap(hv); state.sheetDriver = it } } }
             }
 
+            if (state.standingsHint && st != null) {
+                item { StandingsHint { state.dismissStandingsHint() } }
+            }
+
             item {
                 SlidingSegments(
                     listOf("DRIVERS", "CONSTRUCTORS"),
@@ -152,7 +163,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                     items(st.drivers, key = { "d-" + it.surname + it.position }) { d ->
                         DriverRow(
                             d, leader, fav?.matches(d.name, d.surname) == true,
-                            onDriver = { Haptics.tap(hv); state.sheetDriver = d },
+                            onDriver = { state.sheetDriver = d },
                             onTeam = { Haptics.tap(hv); state.sheetTeam = st.teams.firstOrNull { it.teamId == d.teamId } ?: return@DriverRow },
                         )
                     }
@@ -182,6 +193,28 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     }
 }
 
+/**
+ * The driver's three-letter code ("NOR") on a rounded chip in team colour, with black or
+ * white text, whichever reads better on that colour.
+ */
+@Composable
+fun CodeChip(code: String, color: Color, large: Boolean = true) {
+    val ink = if (contrast(Color.White, color) >= contrast(Color(0xFF0C0F1A), color)) Color.White else Color(0xFF0C0F1A)
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(if (large) 9.dp else 7.dp))
+            .background(color)
+            .padding(horizontal = if (large) 9.dp else 7.dp, vertical = if (large) 7.dp else 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(code, style = orbitron(if (large) 14.sp else 11.sp, FontWeight.Black, ink, 0.06f), maxLines = 1)
+    }
+}
+
+/**
+ * One driver on Standings: code chip, big surname, number, a team pill (its own tap: the team's
+ * panel) and a chevron. The whole card opens the driver's panel and presses in when touched.
+ */
 @Composable
 private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, onDriver: () -> Unit, onTeam: () -> Unit) {
     val color = Color(Teams.color(d.teamId))
@@ -189,36 +222,69 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, onDrive
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (isFav) Modifier.border(1.dp, color.copy(alpha = 0.55f), CardShape) else Modifier)
-            .glassCard(fill = if (isFav) androidx.compose.ui.graphics.lerp(C.Card, color, 0.1f) else C.Card)
+            .then(if (isFav) Modifier.border(1.dp, color.copy(alpha = 0.6f), CardShape) else Modifier)
+            .clip(CardShape)
+            .background(
+                if (isFav) androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(color.copy(alpha = 0.16f), C.Card))
+                else androidx.compose.ui.graphics.SolidColor(C.Card)
+            )
+            .border(1.dp, C.GlassBorder, CardShape)
             .leftEdge(color)
             .pressable(onDriver)
-            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${d.name} ${d.surname}, ${d.teamName}, P${d.position}, ${Fmt.points(d.points)} points. Opens their season."
+            }
+            .heightIn(min = 76.dp)
+            .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(d.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted), modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
+        Text(d.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted), modifier = Modifier.width(24.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.width(8.dp))
-        Flag(Countries.code(d.nationality), 24.dp, 16.dp, 2.dp)
+        Box(Modifier.width(54.dp), contentAlignment = Alignment.Center) { CodeChip(d.code, color) }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(d.name, style = inter(14.sp, FontWeight.SemiBold), maxLines = 1)
-                Text(" " + d.surname, style = inter(14.sp, color = C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(d.name, style = inter(12.sp, color = C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                d.number?.let {
+                    Spacer(Modifier.width(6.dp))
+                    Text("#$it", style = orbitron(11.sp, FontWeight.Bold, readable(color)))
+                }
             }
-            Row(Modifier.tap(onClick = onTeam), verticalAlignment = Alignment.CenterVertically) {
-                Text(d.teamName.uppercase(), style = inter(11.sp, FontWeight.Medium, readable(color), 0.05f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(d.surname.uppercase(), style = orbitron(17.sp, FontWeight.Bold, C.Text, 0.02f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(4.dp))
+            // The team pill: its own target, opens the team.
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(color.copy(alpha = 0.15f))
+                    .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(50))
+                    .tap(onClick = onTeam)
+                    .semantics { contentDescription = "${d.teamName}. Opens the team." }
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color))
+                Spacer(Modifier.width(6.dp))
+                Text(Teams.shortName(d.teamName), style = inter(11.sp, FontWeight.SemiBold, readable(color)), maxLines = 1)
+                Text(" ›", style = inter(11.sp, color = C.TextMuted))
             }
         }
+        Spacer(Modifier.width(6.dp))
         Column(horizontalAlignment = Alignment.End) {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(Fmt.points(d.points), style = orbitron(14.sp, FontWeight.Bold, C.Text))
+                Text(Fmt.points(d.points), style = orbitron(16.sp, FontWeight.Bold, C.Text))
                 Text(" pts", style = inter(11.sp, color = C.TextMuted))
             }
-            if (behind > 0) Text("-" + Fmt.points(behind), style = inter(11.sp, color = C.TextMuted))
+            Text(if (behind > 0) "−" + Fmt.points(behind) else if (d.position == 1) "Leader" else "", style = inter(11.sp, color = C.TextMuted))
         }
+        Ic(R.drawable.lc_chevron_right, C.TextMuted, 18.dp, Modifier.padding(start = 2.dp))
     }
 }
 
+/**
+ * A team on Standings: the header opens the team, each driver line opens that driver, and a
+ * "View team" bar in team colour runs along the bottom.
+ */
 @Composable
 private fun TeamCard(
     t: TeamStanding,
@@ -239,28 +305,57 @@ private fun TeamCard(
             .leftEdge(color)
     ) {
         Row(
-            Modifier.fillMaxWidth().tap(onClick = onTeam).padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .tap(onClick = onTeam)
+                .semantics(mergeDescendants = true) { contentDescription = "${t.teamName}, P${t.position}, ${Fmt.points(t.points)} points. Opens the team." }
+                .heightIn(min = 52.dp)
+                .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(t.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted))
             Spacer(Modifier.width(10.dp))
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text(t.teamName.uppercase(), style = inter(14.sp, FontWeight.Bold, readable(color), 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(t.teamName.uppercase(), style = orbitron(16.sp, FontWeight.Bold, readable(color), 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(Fmt.points(t.points), style = orbitron(16.sp, FontWeight.Bold, C.Text))
+                    Text(" pts", style = inter(11.sp, color = C.TextMuted))
+                }
+                if (behind > 0) Text("−" + Fmt.points(behind), style = inter(11.sp, color = C.TextMuted))
             }
-            Text(Fmt.points(t.points), style = orbitron(14.sp, FontWeight.Bold, C.Text))
-            Text(" pts", style = inter(11.sp, color = C.TextMuted))
-            if (behind > 0) Text("  -" + Fmt.points(behind), style = inter(11.sp, color = C.TextMuted))
         }
         for (d in drivers) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
             Row(
-                Modifier.fillMaxWidth().tap { onDriver(d) }.padding(start = 16.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .tap { onDriver(d) }
+                    .semantics(mergeDescendants = true) { contentDescription = "${d.name} ${d.surname}, ${Fmt.points(d.points)} points. Opens their season." }
+                    .heightIn(min = 52.dp)
+                    .padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${d.name} ${d.surname}", style = inter(13.sp, color = C.TextSecondary))
-                Spacer(Modifier.weight(1f))
+                Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) { CodeChip(d.code, color, large = false) }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(d.name, style = inter(11.sp, color = C.TextSecondary), maxLines = 1)
+                    Text(d.surname.uppercase(), style = orbitron(13.sp, FontWeight.Bold, C.Text), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Text(Fmt.points(d.points), style = inter(13.sp, FontWeight.SemiBold, C.Text))
+                Ic(R.drawable.lc_chevron_right, C.TextMuted, 16.dp, Modifier.padding(start = 4.dp))
             }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(color.copy(alpha = 0.12f))
+                .tap(onClick = onTeam)
+                .heightIn(min = 44.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("View team", style = inter(12.sp, FontWeight.SemiBold, readable(color), 0.04f))
+            Ic(R.drawable.lc_chevron_right, readable(color), 14.dp, Modifier.padding(start = 4.dp))
         }
     }
 }
@@ -311,5 +406,27 @@ private fun FavouriteCard(
             Chip("Change") { picking = true }
             DriverPickerMenu(state, picking) { picking = false }
         }
+    }
+}
+
+/** Shown once: tells people the rows open panels. Gone after × or the first panel opened. */
+@Composable
+private fun StandingsHint(onDismiss: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(C.Highlight.copy(alpha = 0.08f))
+            .border(1.dp, C.Highlight.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .padding(start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Ic(R.drawable.lc_info, C.Highlight, 16.dp)
+        Spacer(Modifier.width(10.dp))
+        Text("Tap a driver or team for their season", style = inter(12.sp, color = C.TextSecondary), modifier = Modifier.weight(1f))
+        Box(
+            Modifier.size(48.dp).tap(onClick = onDismiss).semantics { contentDescription = "Dismiss hint" },
+            contentAlignment = Alignment.Center,
+        ) { Text("×", style = inter(18.sp, color = C.TextMuted)) }
     }
 }

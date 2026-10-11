@@ -212,6 +212,16 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     // ── Driver / team panel (Standings) ──
 
+    /** Show the one-time "Tap a driver or team" hint on Standings. */
+    var standingsHint by mutableStateOf(!prefs.standingsHintSeen)
+        private set
+
+    fun dismissStandingsHint() {
+        if (!standingsHint) return
+        standingsHint = false
+        prefs.standingsHintSeen = true
+    }
+
     /** The driver or team whose panel is open. */
     var sheetDriver by mutableStateOf<app.f1pro.data.DriverStanding?>(null)
     var sheetTeam by mutableStateOf<app.f1pro.data.TeamStanding?>(null)

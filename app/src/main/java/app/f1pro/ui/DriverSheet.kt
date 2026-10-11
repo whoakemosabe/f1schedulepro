@@ -336,9 +336,12 @@ private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number
         }
         // Coil: downloads and decodes off the main thread, keeps memory and disk caches,
         // and fades the photo in.
-        url?.let {
+        url?.let { original ->
+            // The bigger rendition first (sharper when shown this large); the original if not.
+            var src by remember(original) { mutableStateOf(DriverStats.sharperHeadshot(original)) }
             coil3.compose.AsyncImage(
-                model = coil3.request.ImageRequest.Builder(context).data(it).crossfade(true).build(),
+                model = coil3.request.ImageRequest.Builder(context).data(src).crossfade(true).build(),
+                onError = { if (src != original) src = original },
                 contentDescription = "Photo of ${d.name} ${d.surname}",
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.BottomEnd,

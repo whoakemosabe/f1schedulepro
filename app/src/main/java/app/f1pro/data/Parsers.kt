@@ -190,6 +190,7 @@ object Parsers {
                 surname = drv.optString("surname"),
                 nationality = drv.optString("nationality"),
                 number = drv.optString("number").takeIf { it.isNotBlank() && it != "null" },
+                shortCode = drv.optString("shortName").trim().takeIf { it.length == 3 && it.all(Char::isLetter) },
                 teamId = d.optString("teamId").ifBlank { team.optString("teamId") },
                 teamName = team.optString("teamName"),
             )

@@ -400,6 +400,18 @@ object DriverStats {
 
     // ── Headshots (OpenF1) ──
 
+    /**
+     * A bigger version of an F1 headshot. OpenF1 links the smallest rendition, which looks soft
+     * when shown large: the media server's ".transform/1col/" becomes "4col", and a Cloudinary
+     * width ("w_93") becomes w_720. Anything else is left as it is; the app falls back to the
+     * original if the bigger one doesn't load.
+     */
+    fun sharperHeadshot(url: String): String = when {
+        url.contains(".transform/1col/") -> url.replace(".transform/1col/", ".transform/4col/")
+        url.contains("/image/upload/") && Regex("""w_\d+""").containsMatchIn(url) -> url.replace(Regex("""w_\d+"""), "w_720")
+        else -> url
+    }
+
     /** Family name (normalised) → official headshot URL, from OpenF1's /drivers. */
     fun headshots(openF1Json: String): Map<String, String> {
         val arr = try { JSONArray(openF1Json) } catch (e: Exception) { return emptyMap() }

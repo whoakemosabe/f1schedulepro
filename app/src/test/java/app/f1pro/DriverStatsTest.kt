@@ -173,4 +173,21 @@ class DriverStatsTest {
         assertEquals(java.time.LocalDate.of(2006, 8, 25), c.dateOfBirth)
         assertEquals(listOf(2025), c.titles)
     }
+
+    @Test
+    fun sharperHeadshotsAndCodes() {
+        assertEquals(
+            "https://media.formula1.com/d.png/content/dam/fom-website/drivers/L/LANNOR01_Lando_Norris/lannor01.png.transform/4col/image.png",
+            DriverStats.sharperHeadshot("https://media.formula1.com/d.png/content/dam/fom-website/drivers/L/LANNOR01_Lando_Norris/lannor01.png.transform/1col/image.png"),
+        )
+        assertEquals(
+            "https://media.formula1.com/image/upload/c_fill,w_720/q_auto/v1/x.webp",
+            DriverStats.sharperHeadshot("https://media.formula1.com/image/upload/c_fill,w_93/q_auto/v1/x.webp"),
+        )
+        assertEquals("https://example.com/a.png", DriverStats.sharperHeadshot("https://example.com/a.png"))
+        fun d(surname: String, code: String? = null) = app.f1pro.data.DriverStanding(1, 0.0, 0, "X", surname, "", null, "t", "T", code)
+        assertEquals("HUL", d("Hülkenberg").code)
+        assertEquals("NOR", d("Norris", "nor").code)
+        assertEquals("VER", d("Verstappen", "VERS").code)
+    }
 }
