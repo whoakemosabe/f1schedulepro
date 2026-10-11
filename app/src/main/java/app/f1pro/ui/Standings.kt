@@ -124,7 +124,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
             }
 
             when {
-                st == null && state.standingsLoading -> items(10) { Skeleton(56.dp) }
+                st == null && (state.standingsLoading || state.standingsError == null) -> items(10) { Skeleton(56.dp) }
                 st == null -> item {
                     Column(
                         Modifier.fillMaxWidth().glassCard().padding(24.dp),

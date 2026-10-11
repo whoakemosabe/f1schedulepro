@@ -183,7 +183,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                     }
                 }
 
-                if (state.news.isEmpty() && state.newsLoading) {
+                if (state.news.isEmpty() && (state.newsLoading || state.newsError == null)) {
                     items(6) { Skeleton(96.dp) }
                 } else if (state.news.isEmpty()) {
                     item {
