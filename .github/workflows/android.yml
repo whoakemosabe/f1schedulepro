@@ -85,7 +85,9 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          grep -E "^e: |FAILED|error:|Exception|expected:<" build.log | sed 's#file:///home/runner/work/[^/]*/[^/]*/android/##' | awk '!seen[$0]++' > errors.txt || true
+          { grep -E "^e: |error:|ERROR|expected:<|Exception at|FAILED$" build.log; grep -A 10 "What went wrong" build.log; } \
+            | grep -v "^--$" | sed 's#file:///home/runner/work/[^/]*/[^/]*/android/##' | sed 's#/home/runner/work/[^/]*/[^/]*/android/##' \
+            | awk 'NF && !seen[$0]++' > errors.txt || true
           { echo '### Build errors'; echo '```'; head -200 errors.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           sed -n '1,10p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
       - name: Report errors (11-20)
