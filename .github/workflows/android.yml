@@ -100,7 +100,10 @@ jobs:
 
       - name: Library versions in this build
         continue-on-error: true
-        run: ./gradlew -q :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency io.coil-kt.coil3:coil-compose 2>/dev/null | head -3
+        run: |
+          v=$(./gradlew -q :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency io.coil-kt.coil3:coil-compose 2>/dev/null | grep -o 'coil-compose:[0-9][0-9.]*' | head -1)
+          kb=$(( $(stat -c %s app/build/outputs/apk/release/app-release.apk) / 1024 ))
+          echo "::notice::Build: $v, APK ${kb} KB"
 
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
