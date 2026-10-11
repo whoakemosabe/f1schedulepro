@@ -522,6 +522,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
 
         if (!race.isTesting && status != RaceStatus.UPCOMING) ResultsCard(state, race, now)
         if (forecast != null) WeatherCard(state, race, forecast)
+        if (!race.isTesting) TrackCard(race.circuit.id, race.circuit.name)
 
         // Sessions
         Column(Modifier.fillMaxWidth().glassCard(C.Highlight.copy(alpha = 0.4f))) {

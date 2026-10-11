@@ -52,6 +52,7 @@ object Ticker {
     suspend fun tick(context: Context) {
         val app = context.applicationContext
         val seasons = Repo(app).seasons()
+        try { Alerts.finishCountdowns(app, seasons) } catch (e: Exception) { }
         try { Alerts.fireDue(app, seasons) } catch (e: Exception) { }
         try { ResultsWatch.schedule(app, seasons) } catch (e: Exception) { }
         try { Widgets.updateAll(app) } catch (e: Exception) { }

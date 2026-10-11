@@ -79,6 +79,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     var alertsOn by mutableStateOf(prefs.alertsOn)
         private set
     var leadMinutes by mutableStateOf(prefs.leadMinutes)
+    var countdownOn by mutableStateOf(prefs.countdownOn)
         private set
     var alertWhich by mutableStateOf(prefs.alertWhich)
         private set
@@ -291,6 +292,12 @@ class AppState(context: Context, private val scope: CoroutineScope) {
                 .filter { it.session.start in now..(now + leadMinutes * MIN_MS) }
                 .map { it.key }
         }
+        rescheduled()
+    }
+
+    fun setCountdown(on: Boolean) {
+        prefs.countdownOn = on
+        countdownOn = on
         rescheduled()
     }
 

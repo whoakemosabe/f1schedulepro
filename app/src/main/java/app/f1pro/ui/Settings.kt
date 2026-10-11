@@ -296,6 +296,13 @@ fun SettingsPage(state: AppState) {
                 Segments(listOf("15" to "15 min", "30" to "30 min", "60" to "1 hour"), state.leadMinutes.toString()) { state.setLead(it.toInt()) }
                 Small("For:")
                 Segments(listOf("all" to "All", "quali" to "Quali + races", "race" to "Races"), state.alertWhich) { state.setWhich(it) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Live countdown", style = inter(14.sp, FontWeight.Medium))
+                        Text("The reminder stays up and counts down to lights out, on the lock screen too", style = inter(12.sp, color = C.TextSecondary))
+                    }
+                    Switch(state.countdownOn) { state.setCountdown(!state.countdownOn) }
+                }
                 ActionButton("Send a test reminder", R.drawable.lc_bell) {
                     val next = Planner.next(state.seasons, System.currentTimeMillis())
                     Alerts.postTest(context, next)

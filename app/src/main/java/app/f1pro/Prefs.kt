@@ -30,6 +30,16 @@ class Prefs(context: Context) {
         get() = p.getString("alert_which", "all") ?: "all"
         set(v) = p.edit().putString("alert_which", v).apply()
 
+    /** The reminder stays up and counts down to the start, on the lock screen too. */
+    var countdownOn: Boolean
+        get() = p.getBoolean("countdown_on", true)
+        set(v) = p.edit().putBoolean("countdown_on", v).apply()
+
+    /** Countdowns already switched to "is starting", so each is swapped once. */
+    var startedPosted: Set<String>
+        get() = p.getStringSet("started_posted", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("started_posted", v.toSortedSet().toList().takeLast(150).toSet()).apply()
+
     var sentReminders: Set<String>
         get() = p.getStringSet("sent_reminders", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("sent_reminders", v.toSortedSet().toList().takeLast(150).toSet()).apply()
