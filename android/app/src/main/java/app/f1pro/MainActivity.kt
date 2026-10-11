@@ -7,13 +7,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import app.f1pro.ui.AppState
+import app.f1pro.ui.C
 import app.f1pro.ui.F1App
 import app.f1pro.ui.F1Theme
 import app.f1pro.work.Alerts
@@ -45,6 +49,21 @@ class MainActivity : ComponentActivity() {
             state = s
             pendingRace?.let { s.openRaceKey = it; pendingRace = null }
             if (UpdateWatch.openUpdates.value) s.tab = app.f1pro.ui.Tab.Settings
+            // Theme: Dark, Light, or follow the phone. Set before anything reads the palette.
+            val systemDark = isSystemInDarkTheme()
+            val dark = when (s.theme) {
+                "light" -> false
+                "system" -> systemDark
+                else -> true
+            }
+            C.dark = dark
+            LaunchedEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                    navigationBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                )
+                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(C.Bg.toArgb()))
+            }
             CompositionLocalProvider(LocalDensity provides scaled) {
                 F1Theme { F1App(s) }
             }

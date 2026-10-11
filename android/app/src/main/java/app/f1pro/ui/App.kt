@@ -36,6 +36,7 @@ fun F1App(state: AppState) {
     CompositionLocalProvider(LocalFmt provides state.fmt) {
         Column(Modifier.fillMaxSize().background(C.Bg)) {
             Header(state)
+            UpdateBanner()
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 AnimatedContent(
                     targetState = state.tab,

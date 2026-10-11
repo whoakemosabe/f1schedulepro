@@ -64,10 +64,22 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     val st = state.standings
     val now = rememberNow(60_000)
     val calendarYear = remember(state.seasons, now) { state.seasonFor(now)?.year }
+    val view = androidx.compose.ui.platform.LocalView.current
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(state.standingsLoading) {
+        if (!state.standingsLoading && pulled) {
+            if (state.standingsError == null) Haptics.confirm(view) else Haptics.reject(view)
+            pulled = false
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = state.standingsLoading && st != null,
-        onRefresh = { state.loadStandings() },
+        onRefresh = {
+            Haptics.settle(view)
+            pulled = true
+            state.loadStandings()
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
@@ -99,9 +111,15 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
             }
 
             item {
-                Toggle(view) {
-                    view = it
-                    state.prefs.standingsView = it
+                SlidingSegments(
+                    listOf("DRIVERS", "CONSTRUCTORS"),
+                    if (view == "drivers") 0 else 1,
+                    Modifier.fillMaxWidth(),
+                    icons = listOf(R.drawable.lc_trophy, R.drawable.lc_users),
+                    height = 44.dp,
+                ) {
+                    view = if (it == 0) "drivers" else "constructors"
+                    state.prefs.standingsView = view
                 }
             }
 
@@ -115,7 +133,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                     ) {
                         Ic(R.drawable.lc_circle_alert, C.Live, 28.dp)
                         Text(state.standingsError ?: "Failed to load standings", style = inter(14.sp, color = C.TextSecondary), textAlign = TextAlign.Center)
-                        Row(Modifier.clickable { state.loadStandings() }, verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.tap { state.loadStandings() }, verticalAlignment = Alignment.CenterVertically) {
                             Ic(R.drawable.lc_refresh_cw, C.Accent, 12.dp)
                             Spacer(Modifier.width(6.dp))
                             Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.Accent))
@@ -150,46 +168,6 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
 }
 
 @Composable
-private fun Toggle(view: String, onChange: (String) -> Unit) {
-    BoxWithConstraints(
-        Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(C.Bar)
-            .border(1.dp, C.GlassBorder, CardShape)
-            .padding(4.dp)
-    ) {
-        val half = maxWidth / 2
-        val pos by animateFloatAsState(if (view == "drivers") 0f else 1f, spring(dampingRatio = 0.55f, stiffness = 400f), label = "pill")
-        Box(
-            Modifier
-                .offset(x = half * pos)
-                .width(half)
-                .height(38.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(C.Accent)
-        )
-        Row(Modifier.fillMaxWidth().height(38.dp)) {
-            for ((v, label, icon) in listOf(Triple("drivers", "DRIVERS", R.drawable.lc_trophy), Triple("constructors", "CONSTRUCTORS", R.drawable.lc_users))) {
-                val active = v == view
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(remember { MutableInteractionSource() }, indication = null) { onChange(v) },
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Ic(icon, if (active) Color.White else C.TextMuted, 14.dp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(label, style = inter(13.sp, FontWeight.SemiBold, if (active) Color.White else C.TextMuted, 0.05f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun DriverRow(d: DriverStanding, leader: Double, open: (String) -> Unit) {
     val color = Color(Teams.color(d.teamId))
     val behind = if (d.points < leader) leader - d.points else 0.0
@@ -203,16 +181,16 @@ private fun DriverRow(d: DriverStanding, leader: Double, open: (String) -> Unit)
     ) {
         Text(d.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted), modifier = Modifier.width(26.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.width(8.dp))
-        Text(Countries.flag(Countries.code(d.nationality)), style = inter(18.sp))
+        Flag(Countries.code(d.nationality), 24.dp, 16.dp, 2.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row(Modifier.clickable { open(d.url) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.tap { open(d.url) }, verticalAlignment = Alignment.CenterVertically) {
                 Text(d.name, style = inter(14.sp, FontWeight.SemiBold), maxLines = 1)
                 Text(" " + d.surname, style = inter(14.sp, color = C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(4.dp))
                 Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
             }
-            Row(Modifier.clickable { Teams.url(d.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.tap { Teams.url(d.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
                 Text(d.teamName.uppercase(), style = inter(11.sp, FontWeight.Medium, color, 0.05f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(4.dp))
                 Ic(R.drawable.lc_external_link, C.TextMuted, 8.dp)
@@ -239,7 +217,7 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
         ) {
             Text(t.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted))
             Spacer(Modifier.width(10.dp))
-            Row(Modifier.weight(1f).clickable { Teams.url(t.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).tap { Teams.url(t.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
                 Text(t.teamName.uppercase(), style = inter(14.sp, FontWeight.Bold, color, 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(4.dp))
                 Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
@@ -251,7 +229,7 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
         for (d in drivers) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
             Row(
-                Modifier.fillMaxWidth().clickable { open(d.url) }.padding(start = 16.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                Modifier.fillMaxWidth().tap { open(d.url) }.padding(start = 16.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${d.name} ${d.surname}", style = inter(13.sp, color = C.TextSecondary))

@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -104,9 +106,13 @@ fun Modifier.pressable(onClick: () -> Unit): Modifier {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed) 0.985f else 1f, tween(80), label = "press")
+    val view = androidx.compose.ui.platform.LocalView.current
     return this
         .scale(s)
-        .clickable(interactionSource = source, indication = null, onClick = onClick)
+        .clickable(interactionSource = source, indication = null) {
+            Haptics.tap(view)
+            onClick()
+        }
 }
 
 /** Small pill badge: uppercase, tinted background and border. */
@@ -227,7 +233,7 @@ fun Chip(
             .clip(RoundedCornerShape(8.dp))
             .background(if (selected) C.Accent else C.SurfaceLight)
             .border(1.dp, if (selected) C.Accent else C.GlassBorder, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .tap(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -261,3 +267,70 @@ fun openUrl(context: Context, url: String) {
         } catch (e2: Exception) { }
     } catch (e: Exception) { }
 }
+
+/**
+ * Glass track with a red pill that glides (and slightly overshoots) to the chosen option,
+ * like the segment rows in Ljós. Labels fade between muted and white as the pill passes.
+ */
+@Composable
+fun SlidingSegments(
+    options: List<String>,
+    selected: Int,
+    modifier: Modifier = Modifier,
+    icons: List<Int>? = null,
+    height: Dp = 36.dp,
+    onSelect: (Int) -> Unit,
+) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val pos by animateFloatAsState(
+        selected.toFloat(),
+        androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 380f),
+        label = "segment",
+    )
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier
+            .height(height)
+            .clip(RoundedCornerShape(12.dp))
+            .background(C.SurfaceLight.copy(alpha = if (C.dark) 0.6f else 1f))
+            .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+            .padding(3.dp)
+    ) {
+        val segW = maxWidth / options.size
+        Box(
+            Modifier
+                .offset(x = segW * pos)
+                .width(segW)
+                .height(height - 6.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Brush.horizontalGradient(listOf(C.Accent, C.AccentGlow)))
+        )
+        Row(Modifier.fillMaxWidth().height(height - 6.dp)) {
+            options.forEachIndexed { i, label ->
+                val closeness = (1f - kotlin.math.abs(pos - i)).coerceIn(0f, 1f)
+                val color = androidx.compose.ui.graphics.lerp(C.TextMuted, Color.White, closeness)
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(height - 6.dp)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (i != selected) Haptics.segment(view)
+                            onSelect(i)
+                        },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    icons?.getOrNull(i)?.let {
+                        Ic(it, color, 14.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        label,
+                        style = inter(13.sp, androidx.compose.ui.text.font.FontWeight.SemiBold, color, 0.02f),
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+

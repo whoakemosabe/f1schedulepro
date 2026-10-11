@@ -61,7 +61,7 @@ import kotlinx.coroutines.delay
 
 private data class QuickLink(val label: String, val url: String, val icon: Int, val color: Color)
 
-private val QUICK_LINKS = listOf(
+private val QUICK_LINKS get() = listOf(
     QuickLink("F1 TV", "https://f1tv.formula1.com", R.drawable.lc_tv, C.Highlight),
     QuickLink("YouTube", "https://www.youtube.com/F1", R.drawable.lc_circle_play, C.Live),
     QuickLink("Motorsport", "https://www.motorsport.com/f1/", R.drawable.lc_newspaper, C.Accent),
@@ -70,7 +70,7 @@ private val QUICK_LINKS = listOf(
     QuickLink("FIA Rules", "https://www.fia.com/regulation/category/110", R.drawable.lc_bookmark, C.TextMuted),
 )
 
-private val SOURCE_COLORS = mapOf(
+private val SOURCE_COLORS get() = mapOf(
     "RACER" to C.Highlight.copy(alpha = 0.6f),
     "Autosport" to C.Warning.copy(alpha = 0.6f),
     "Motorsport" to C.Success.copy(alpha = 0.6f),
@@ -86,6 +86,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
     var sort by remember { mutableStateOf(state.prefs.newsSort) }
     var sortOpen by remember { mutableStateOf(false) }
     val now = rememberNow(60_000)
+    val view = androidx.compose.ui.platform.LocalView.current
 
     LaunchedEffect(Unit) {
         if (state.news.isEmpty() || System.currentTimeMillis() - state.newsAt > 5 * MIN_MS) state.loadNews()
@@ -96,6 +97,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
     LaunchedEffect(state.newsToast) {
         if (state.newsToast == 0L) return@LaunchedEffect
         toast = state.newsToast > 0
+        if (state.newsToast > 0) Haptics.confirm(view) else Haptics.reject(view)
         delay(2000)
         toast = null
     }
@@ -106,7 +108,10 @@ fun NewsPage(state: AppState, listState: LazyListState) {
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = { state.loadNews(manual = true) },
+            onRefresh = {
+                Haptics.settle(view)
+                state.loadNews(manual = true)
+            },
             modifier = Modifier.fillMaxSize(),
         ) {
             LazyColumn(
@@ -136,7 +141,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(C.SurfaceLight)
                                     .border(1.dp, C.GlassBorder, RoundedCornerShape(8.dp))
-                                    .clickable { sortOpen = true }
+                                    .tap { sortOpen = true }
                                     .padding(horizontal = 8.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -153,6 +158,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                                     DropdownMenuItem(
                                         text = { Text(label, style = inter(12.sp, FontWeight.Medium, if (k == sort) C.Accent else C.Text)) },
                                         onClick = {
+                                            if (k != sort) Haptics.segment(view)
                                             sort = k
                                             state.prefs.newsSort = k
                                             sortOpen = false
@@ -171,7 +177,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (state.newsLoading) C.Accent.copy(alpha = 0.1f) else Color.Transparent)
-                                .clickable(enabled = !state.newsLoading) { state.loadNews(manual = true) },
+                                .tap(enabled = !state.newsLoading) { state.loadNews(manual = true) },
                             contentAlignment = Alignment.Center,
                         ) {
                             Ic(R.drawable.lc_refresh_cw, if (state.newsLoading) C.Accent else C.TextMuted, 14.dp, Modifier.rotate(spin))
@@ -190,7 +196,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                         ) {
                             Ic(R.drawable.lc_circle_alert, C.Live, 28.dp)
                             Text(state.newsError ?: "Failed to load news", style = inter(14.sp, color = C.TextSecondary), textAlign = TextAlign.Center)
-                            Row(Modifier.clickable { state.loadNews(manual = true) }, verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.tap { state.loadNews(manual = true) }, verticalAlignment = Alignment.CenterVertically) {
                                 Ic(R.drawable.lc_refresh_cw, C.Accent, 12.dp)
                                 Spacer(Modifier.width(6.dp))
                                 Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.Accent))
@@ -204,7 +210,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                             Modifier
                                 .fillMaxWidth()
                                 .alpha(if (refreshing) 0.4f else 1f)
-                                .glassCard(edge = if (featured) C.Accent else C.Highlight.copy(alpha = 0.3f), fill = if (featured) Color(0xFF16121F) else C.Card)
+                                .glassCard(edge = if (featured) C.Accent else C.Highlight.copy(alpha = 0.3f), fill = if (featured) androidx.compose.ui.graphics.lerp(C.Card, C.Accent, 0.05f) else C.Card)
                                 .pressable { openUrl(context, n.link) }
                                 .padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),

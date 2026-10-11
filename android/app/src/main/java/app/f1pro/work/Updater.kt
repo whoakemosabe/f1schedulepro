@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import app.f1pro.Prefs
 import kotlinx.coroutines.Dispatchers
@@ -17,8 +20,7 @@ import java.net.URL
 
 /**
  * Checks this repo's GitHub Releases for a newer f1pro.apk, downloads it and hands it to the
- * system installer. The repo is private, so this needs a read-only token pasted in Settings;
- * without one, Settings offers the releases page instead.
+ * system installer. The repo is public, so no token is needed (same as Afli and Ljós).
  */
 object Updater {
     const val REPO = "whoakemosabe/f1schedulepro"
@@ -49,13 +51,14 @@ object Updater {
         return false
     }
 
-    suspend fun check(context: Context, token: String): Check = withContext(Dispatchers.IO) {
-        if (token.isBlank()) return@withContext Check.Failed("Add a GitHub token to check from the app.")
+    suspend fun check(context: Context): Check = withContext(Dispatchers.IO) {
         try {
-            val c = open("https://api.github.com/repos/$REPO/releases/latest", token, "application/vnd.github+json")
+            val c = open("https://api.github.com/repos/$REPO/releases/latest", "application/vnd.github+json")
             val code = c.responseCode
-            if (code == 401 || code == 403) { c.disconnect(); return@withContext Check.Failed("GitHub didn't accept the token.") }
-            if (code == 404) { c.disconnect(); return@withContext Check.Failed("No release found (or the token can't see the repo).") }
+            if (code == 404 || code == 401 || code == 403) {
+                c.disconnect()
+                return@withContext Check.Failed("GitHub can't see the releases (is the repo public?).")
+            }
             if (code !in 200..299) throw IOException("GitHub returned $code")
             val json = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
             c.disconnect()
@@ -68,24 +71,23 @@ object Updater {
             }
             val apk = asset ?: return@withContext Check.Failed("The latest release has no APK yet.")
             if (!isNewer(tag, installedVersion(context))) return@withContext Check.UpToDate
-            Check.Available(Release(tag.removePrefix("v"), apk.getString("url"), apk.optLong("size")))
+            Check.Available(Release(tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size")))
         } catch (e: Exception) {
             Check.Failed("Couldn't reach GitHub.")
         }
     }
 
     /** Downloads the APK into the app cache, reporting progress 0..1. */
-    suspend fun download(context: Context, release: Release, token: String, progress: (Float) -> Unit): File =
+    suspend fun download(context: Context, release: Release, progress: (Float) -> Unit): File =
         withContext(Dispatchers.IO) {
-            // The asset API answers with a redirect to signed storage, fetched without the token.
-            val first = open(release.assetUrl, token, "application/octet-stream")
-            first.instanceFollowRedirects = false
-            val conn = if (first.responseCode in 300..399) {
-                val location = first.getHeaderField("Location") ?: throw IOException("Download link missing")
-                first.disconnect()
-                open(location, "", "application/octet-stream")
-            } else {
-                first
+            // GitHub answers with redirects to signed storage; follow them by hand (cross-host).
+            var conn = open(release.assetUrl, "application/octet-stream").apply { instanceFollowRedirects = false }
+            var hops = 0
+            while (conn.responseCode in 300..399 && hops < 5) {
+                val next = conn.getHeaderField("Location") ?: throw IOException("Download link missing")
+                conn.disconnect()
+                hops++
+                conn = open(next, "application/octet-stream").apply { instanceFollowRedirects = false }
             }
             if (conn.responseCode !in 200..299) throw IOException("Download failed (${conn.responseCode})")
             val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.sizeBytes
@@ -126,51 +128,125 @@ object Updater {
         return true
     }
 
-    private fun open(url: String, token: String, accept: String): HttpURLConnection {
+    private fun open(url: String, accept: String): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15_000
         c.readTimeout = 60_000
         c.setRequestProperty("Accept", accept)
         c.setRequestProperty("User-Agent", "F1Pro-updater")
         c.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-        if (token.isNotBlank()) c.setRequestProperty("Authorization", "Bearer $token")
         return c
     }
 }
 
-/** Background checks (at most every 6 hours) and one quiet notification per new version. */
+/** Where the one-tap update is: shared by the top banner and Settings → Updates. */
+sealed class UpdateUi {
+    data object Idle : UpdateUi()
+    data object Checking : UpdateUi()
+    data object UpToDate : UpdateUi()
+    data class Downloading(val version: String) : UpdateUi()
+    data class Ready(val file: File, val version: String, val note: String? = null) : UpdateUi()
+    data class Error(val message: String) : UpdateUi()
+}
+
+/**
+ * Notices new releases on its own, like Afli: the background refresh asks GitHub about every
+ * 6 hours and posts one quiet notification per version; opening the app asks at most every
+ * 10 minutes, and pulling down on the schedule always asks. A waiting version shows as the
+ * banner across the top; tapping it downloads, tapping again installs.
+ */
 object UpdateWatch {
-    private const val EVERY = 6 * 60 * 60_000L
+    private const val BACKGROUND_EVERY = 6 * 60 * 60_000L
+    private const val OPEN_EVERY = 10 * 60_000L
+
+    /** The newer version waiting, if any. */
+    var waitingVersion by mutableStateOf<String?>(null)
+        private set
+
+    /** The version whose banner was closed with ×. */
+    var bannerHidden by mutableStateOf<String?>(null)
 
     /** Set when the app should open Settings → Updates (e.g. from the notification). */
     val openUpdates = mutableStateOf(false)
+
+    var ui by mutableStateOf<UpdateUi>(UpdateUi.Idle)
+    var progress by mutableFloatStateOf(0f)
 
     fun waiting(context: Context): String? {
         val v = Prefs(context).availableVersion
         return v.takeIf { it.isNotBlank() && Updater.isNewer(it, Updater.installedVersion(context)) }
     }
 
-    suspend fun check(context: Context, force: Boolean): Updater.Check? {
-        val p = Prefs(context)
-        val now = System.currentTimeMillis()
-        if (p.githubToken.isBlank()) return null
-        if (!force && now - p.lastUpdateCheck < EVERY) return null
-        p.lastUpdateCheck = now
-        val r = Updater.check(context, p.githubToken)
-        when (r) {
-            is Updater.Check.Available -> p.availableVersion = r.release.version
-            Updater.Check.UpToDate -> p.availableVersion = ""
-            is Updater.Check.Failed -> {}
-        }
-        return r
+    fun load(context: Context) {
+        waitingVersion = waiting(context)
     }
 
+    /** Asks GitHub if it's been long enough (or [force]); returns the newer version waiting. */
+    suspend fun check(context: Context, background: Boolean, force: Boolean = false): String? {
+        val p = Prefs(context)
+        val now = System.currentTimeMillis()
+        val every = if (background) BACKGROUND_EVERY else OPEN_EVERY
+        if (force || now - p.lastUpdateCheck >= every) {
+            p.lastUpdateCheck = now
+            when (val r = Updater.check(context)) {
+                is Updater.Check.Available -> p.availableVersion = r.release.version
+                Updater.Check.UpToDate -> p.availableVersion = ""
+                is Updater.Check.Failed -> {}
+            }
+        }
+        val w = waiting(context)
+        waitingVersion = w
+        return w
+    }
+
+    /** Background: check, and notify once per new version. */
     suspend fun checkAndNotify(context: Context) {
-        check(context, force = false)
-        val v = waiting(context) ?: return
+        val v = check(context, background = true) ?: return
         val p = Prefs(context)
         if (p.notifiedVersion == v) return
         p.notifiedVersion = v
         Alerts.postUpdate(context, v)
+    }
+
+    /**
+     * One tap: check → download → ready; a tap when ready installs. Returns true when the
+     * download finished (for a confirm haptic).
+     */
+    suspend fun tap(context: Context): Boolean {
+        when (val st = ui) {
+            is UpdateUi.Ready -> {
+                if (!Updater.install(context, st.file)) ui = st.copy(note = "Allow F1 Pro to install updates, then tap again.")
+                return false
+            }
+            is UpdateUi.Checking, is UpdateUi.Downloading -> return false
+            else -> {}
+        }
+        ui = UpdateUi.Checking
+        return when (val r = Updater.check(context)) {
+            is Updater.Check.Available -> {
+                Prefs(context).availableVersion = r.release.version
+                waitingVersion = waiting(context)
+                ui = UpdateUi.Downloading(r.release.version)
+                progress = 0f
+                try {
+                    val f = Updater.download(context, r.release) { progress = it }
+                    ui = UpdateUi.Ready(f, r.release.version)
+                    true
+                } catch (e: Exception) {
+                    ui = UpdateUi.Error("Download failed. Tap to try again.")
+                    false
+                }
+            }
+            Updater.Check.UpToDate -> {
+                Prefs(context).availableVersion = ""
+                waitingVersion = null
+                ui = UpdateUi.UpToDate
+                false
+            }
+            is Updater.Check.Failed -> {
+                ui = UpdateUi.Error(r.message)
+                false
+            }
+        }
     }
 }

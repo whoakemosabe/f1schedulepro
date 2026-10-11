@@ -66,6 +66,7 @@ import app.f1pro.data.Race
 import app.f1pro.data.RaceStatus
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulePage(state: AppState, listState: LazyListState) {
     val now = rememberNow(30_000)
@@ -113,8 +114,26 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
         return
     }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(state.calendarLoading) {
+        if (!state.calendarLoading && pulled) {
+            Haptics.confirm(view)
+            pulled = false
+        }
+    }
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = state.calendarLoading && pulled,
+        onRefresh = {
+            Haptics.settle(view)
+            pulled = true
+            state.refreshAll()
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     LazyColumn(
         state = listState,
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -145,6 +164,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
                 onClick = { selected = i },
             )
         }
+    }
     }
 }
 
@@ -199,7 +219,7 @@ private fun RaceCard(
             .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(race.circuit.flag, style = inter(26.sp))
+        Flag(race.circuit.countryCode, 36.dp, 24.dp, 4.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -283,6 +303,13 @@ private fun RaceDetailPager(
 ) {
     val pager = rememberPagerState(initialPage = start) { races.size }
     val scope = rememberCoroutineScope()
+    val view = androidx.compose.ui.platform.LocalView.current
+    // A tick each time a swipe lands on another race.
+    var lastPage by remember { mutableStateOf(start) }
+    LaunchedEffect(pager.settledPage) {
+        if (pager.settledPage != lastPage) Haptics.segment(view)
+        lastPage = pager.settledPage
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
@@ -294,7 +321,7 @@ private fun RaceDetailPager(
                     .clip(RoundedCornerShape(12.dp))
                     .background(C.SurfaceLight.copy(alpha = 0.5f))
                     .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onBack)
+                    .tap(onClick = onBack)
                     .padding(start = 8.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -331,7 +358,7 @@ private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .background(C.SurfaceLight.copy(alpha = 0.5f))
             .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick),
+            .tap(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Ic(icon, C.TextMuted, 18.dp) }
 }
@@ -371,7 +398,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(race.circuit.flag, style = inter(36.sp))
+                Flag(race.circuit.countryCode, 48.dp, 32.dp, 8.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -452,7 +479,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                         Text(lr.time, style = orbitron(11.sp, FontWeight.Bold, C.Accent))
                         Text("  |  ", style = inter(11.sp, color = C.TextMuted.copy(alpha = 0.4f)))
                         Row(
-                            Modifier.clickable { openUrl(context, lr.driverUrl) },
+                            Modifier.tap { openUrl(context, lr.driverUrl) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(lr.driver, style = inter(11.sp, color = C.TextSecondary))
@@ -468,7 +495,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                         .clip(RoundedCornerShape(6.dp))
                         .background(C.SurfaceLight)
                         .border(1.dp, C.GlassBorder, RoundedCornerShape(6.dp))
-                        .clickable { openUrl(context, stats.wiki) }
+                        .tap { openUrl(context, stats.wiki) }
                         .padding(vertical = 7.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
@@ -514,7 +541,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                         .fillMaxWidth()
                         .background(rowBg)
                         .drawBehind { drawRect(rowEdge, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) }
-                        .then(if (results != null) Modifier.clickable { openUrl(context, results) } else Modifier)
+                        .then(if (results != null) Modifier.tap { openUrl(context, results) } else Modifier)
                         .alpha(if (isPast) 0.4f else 1f)
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,

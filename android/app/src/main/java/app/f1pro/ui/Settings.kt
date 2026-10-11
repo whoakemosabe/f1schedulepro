@@ -71,6 +71,7 @@ import app.f1pro.data.Planner
 import app.f1pro.widget.NextWidgetReceiver
 import app.f1pro.widget.WeekendWidgetReceiver
 import app.f1pro.work.Alerts
+import app.f1pro.work.UpdateUi
 import app.f1pro.work.UpdateWatch
 import app.f1pro.work.Updater
 import kotlinx.coroutines.launch
@@ -110,6 +111,7 @@ private fun SettingsCard(title: String, icon: Int, iconColor: Color = C.Highligh
 
 @Composable
 private fun Switch(on: Boolean, onClick: () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
     val x by animateDpAsState(if (on) 24.dp else 4.dp, tween(200), label = "knob")
     Box(
         Modifier
@@ -117,7 +119,10 @@ private fun Switch(on: Boolean, onClick: () -> Unit) {
             .clip(CircleShape)
             .background(if (on) C.Accent else C.SurfaceLight)
             .border(1.dp, if (on) C.Accent else C.Border, CircleShape)
-            .clickable(onClick = onClick),
+            .clickable {
+                Haptics.toggle(view, !on)
+                onClick()
+            },
     ) {
         Box(Modifier.offset(x = x, y = 4.dp).size(20.dp).clip(CircleShape).background(C.Text))
     }
@@ -125,11 +130,11 @@ private fun Switch(on: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun Segments(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for ((k, label) in options) {
-            Chip(label, Modifier.weight(1f), selected = k == selected) { onSelect(k) }
-        }
-    }
+    SlidingSegments(
+        options.map { it.second },
+        options.indexOfFirst { it.first == selected }.coerceAtLeast(0),
+        Modifier.fillMaxWidth(),
+    ) { onSelect(options[it].first) }
 }
 
 @Composable
@@ -145,7 +150,7 @@ private fun ActionButton(text: String, icon: Int?, color: Color = C.Highlight, e
             .clip(RoundedCornerShape(8.dp))
             .background(C.SurfaceLight)
             .border(1.dp, C.GlassBorder, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .tap(enabled = enabled, onClick = onClick)
             .padding(vertical = 9.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -163,6 +168,7 @@ private fun ActionButton(text: String, icon: Int?, color: Color = C.Highlight, e
 fun SettingsPage(state: AppState) {
     val context = LocalContext.current
     val fmt = LocalFmt.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
     var updatesHighlighted by remember { mutableStateOf(false) }
     val openUpdates by UpdateWatch.openUpdates
@@ -179,6 +185,18 @@ fun SettingsPage(state: AppState) {
         Modifier.fillMaxSize().verticalScroll(scroll).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // ── Appearance ──
+        SettingsCard("Appearance", R.drawable.lc_moon) {
+            Segments(listOf("dark" to "Dark", "light" to "Light", "system" to "System"), state.theme) { state.chooseTheme(it) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Haptics", style = inter(14.sp, FontWeight.Medium))
+                    Text("Little taps when you press, switch and swipe", style = inter(12.sp, color = C.TextSecondary))
+                }
+                Switch(state.haptics) { state.chooseHaptics(!state.haptics) }
+            }
+        }
+
         // ── Time zone & clock ──
         var zoneOpen by remember { mutableStateOf(false) }
         SettingsCard("Timezone", R.drawable.lc_globe) {
@@ -189,7 +207,7 @@ fun SettingsPage(state: AppState) {
                         .clip(RoundedCornerShape(8.dp))
                         .background(C.SurfaceLight)
                         .border(1.dp, C.Border, RoundedCornerShape(8.dp))
-                        .clickable { zoneOpen = true }
+                        .tap { zoneOpen = true }
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -228,6 +246,7 @@ fun SettingsPage(state: AppState) {
                                 }
                             },
                             onClick = {
+                                if (id != state.timezone) Haptics.segment(view)
                                 state.setZone(id)
                                 zoneOpen = false
                             },
@@ -236,7 +255,7 @@ fun SettingsPage(state: AppState) {
                 }
             }
             Small("Clock")
-            Segments(listOf("auto" to "Phone", "12" to "12-hour", "24" to "24-hour"), state.clock) { state.setClock(it) }
+            Segments(listOf("auto" to "Phone", "12" to "12-hour", "24" to "24-hour"), state.clock) { state.chooseClock(it) }
         }
 
         // ── Reminders ──
@@ -307,7 +326,7 @@ fun SettingsPage(state: AppState) {
         }
 
         // ── Updates ──
-        UpdatesCard(state, updatesHighlighted)
+        UpdatesCard(updatesHighlighted)
 
         // ── About ──
         SettingsCard("About", R.drawable.lc_info, trailing = {
@@ -368,7 +387,7 @@ private fun KorbenTag() {
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val mono = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xD9FFFFFF))
+            val mono = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = C.Text.copy(alpha = 0.85f))
             Text("Made with ", style = mono)
             Text("♥", style = mono.copy(color = Color(0xFFFF69B4)))
             Text(" by Korben // ${Year.now().value}", style = mono)
@@ -377,88 +396,64 @@ private fun KorbenTag() {
 }
 
 @Composable
-private fun UpdatesCard(state: AppState, highlighted: Boolean) {
+private fun UpdatesCard(highlighted: Boolean) {
     val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
-    var token by remember { mutableStateOf(state.prefs.githubToken) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var checking by remember { mutableStateOf(false) }
-    var release by remember { mutableStateOf<Updater.Release?>(null) }
-    var progress by remember { mutableFloatStateOf(-1f) }
-    val waiting = UpdateWatch.waiting(context)
+    val waiting = UpdateWatch.waitingVersion
+    val ui = UpdateWatch.ui
 
     SettingsCard("Updates", R.drawable.lc_download, if (highlighted || waiting != null) C.Success else C.Highlight) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Installed", style = inter(13.sp, color = C.TextSecondary), modifier = Modifier.weight(1f))
             Text("v" + Updater.installedVersion(context), style = inter(13.sp, FontWeight.SemiBold))
         }
-        if (waiting != null && release == null) {
-            Small("Version $waiting is out.", C.Success)
+        Small("F1 Pro checks GitHub for new versions by itself. When one is out, a banner shows at the top: tap it to download, tap again to install. It installs over this one and keeps your settings.")
+        val label = when (ui) {
+            UpdateUi.Idle -> if (waiting != null) "Download v$waiting" else "Check for updates"
+            UpdateUi.Checking -> "Checking…"
+            is UpdateUi.Downloading -> "Downloading… ${(UpdateWatch.progress * 100).toInt()}%"
+            is UpdateUi.Ready -> "Install v${ui.version}"
+            is UpdateUi.Error -> "Try again"
+            UpdateUi.UpToDate -> "Check again"
         }
-        Small("New versions are published as releases on GitHub. Your repo is private, so checking from the app needs a read-only GitHub token (fine-grained, Contents: read on f1schedulepro).")
-        BasicTextField(
-            value = token,
-            onValueChange = {
-                token = it.trim()
-                state.prefs.githubToken = it.trim()
-            },
-            singleLine = true,
-            textStyle = inter(13.sp, color = C.Text),
-            cursorBrush = SolidColor(C.Accent),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            decorationBox = { inner ->
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(C.SurfaceLight)
-                        .border(1.dp, C.Border, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    if (token.isEmpty()) Text("GitHub token (optional)", style = inter(13.sp, color = C.TextMuted))
-                    inner()
-                }
-            },
-        )
-        val r = release
-        when {
-            progress >= 0f -> {
-                Small("Downloading… ${(progress * 100).toInt()}%")
-                Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(C.SurfaceLight)) {
-                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(C.Accent))
-                }
-            }
-            r != null -> ActionButton("Download and install v${r.version}", R.drawable.lc_download, C.Success) {
-                progress = 0f
-                scope.launch {
-                    try {
-                        val f = Updater.download(context, r, state.prefs.githubToken) { progress = it }
-                        progress = -1f
-                        if (!Updater.install(context, f)) status = "Allow F1 Pro to install apps, then tap again."
-                    } catch (e: Exception) {
-                        progress = -1f
-                        status = e.message ?: "Download failed"
-                    }
-                }
-            }
-            else -> ActionButton(if (checking) "Checking…" else "Check for updates", R.drawable.lc_refresh_cw, enabled = !checking && token.isNotBlank()) {
-                checking = true
-                status = null
-                scope.launch {
-                    when (val c = UpdateWatch.check(context, force = true)) {
-                        is Updater.Check.Available -> release = c.release
-                        Updater.Check.UpToDate -> status = "You're on the latest version."
-                        is Updater.Check.Failed -> status = c.message
-                        null -> status = "Add a token first."
-                    }
-                    checking = false
+        ActionButton(
+            label,
+            if (ui is UpdateUi.Ready || waiting != null) R.drawable.lc_download else R.drawable.lc_refresh_cw,
+            if (ui is UpdateUi.Ready || waiting != null) C.Success else C.Highlight,
+            enabled = ui !is UpdateUi.Checking && ui !is UpdateUi.Downloading,
+        ) {
+            scope.launch {
+                val ok = UpdateWatch.tap(context)
+                when {
+                    ok -> Haptics.confirm(view)
+                    UpdateWatch.ui is UpdateUi.Error -> Haptics.reject(view)
                 }
             }
         }
-        status?.let { Small(it, C.TextSecondary) }
+        if (ui is UpdateUi.Downloading) ProgressLine(UpdateWatch.progress)
+        when (ui) {
+            UpdateUi.UpToDate -> Small("You're on the latest version.", C.Success)
+            is UpdateUi.Error -> Small(ui.message, C.Warning)
+            is UpdateUi.Ready -> ui.note?.let { Small(it, C.Warning) }
+            else -> {}
+        }
         ActionButton("Open releases on GitHub", R.drawable.lc_external_link, C.TextSecondary) {
             openUrl(context, Updater.RELEASES_URL)
         }
+    }
+}
+
+@Composable
+fun ProgressLine(progress: Float) {
+    val shown by androidx.compose.animation.core.animateFloatAsState(progress, tween(260), label = "progress")
+    Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(C.SurfaceLight)) {
+        Box(
+            Modifier
+                .fillMaxWidth(shown.coerceIn(0f, 1f))
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(Brush.horizontalGradient(listOf(C.Accent, C.AccentGlow)))
+        )
     }
 }

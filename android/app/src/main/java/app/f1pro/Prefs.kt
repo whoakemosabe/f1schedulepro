@@ -42,11 +42,16 @@ class Prefs(context: Context) {
         get() = p.getString("news_sort", "newest") ?: "newest"
         set(v) = p.edit().putString("news_sort", v).apply()
 
-    // ── Updates (the repo is private, so in-app checks need a read-only GitHub token) ──
+    /** "dark", "light" or "system". */
+    var theme: String
+        get() = p.getString("theme", "dark") ?: "dark"
+        set(v) = p.edit().putString("theme", v).apply()
 
-    var githubToken: String
-        get() = p.getString("github_token", "") ?: ""
-        set(v) = p.edit().putString("github_token", v.trim()).apply()
+    var haptics: Boolean
+        get() = p.getBoolean("haptics", true)
+        set(v) = p.edit().putBoolean("haptics", v).apply()
+
+    // ── Updates ──
 
     var lastUpdateCheck: Long
         get() = p.getLong("last_update_check", 0)

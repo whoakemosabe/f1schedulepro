@@ -3,6 +3,9 @@ package app.f1pro.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -16,28 +19,35 @@ import app.f1pro.Fmt
 import app.f1pro.R
 import java.time.ZoneId
 
-/** The PWA's design tokens. */
+/**
+ * The PWA's design tokens, with a light counterpart. [dark] is Compose state, so every screen
+ * redraws when the theme changes.
+ */
 object C {
-    val Bg = Color(0xFF0C0F1A)
-    val Surface = Color(0xFF131830)
-    val SurfaceLight = Color(0xFF1A2040)
-    val SurfaceLighter = Color(0xFF222850)
-    val Border = Color(0xFF252D55)
-    val BorderLight = Color(0xFF303A6A)
-    val Accent = Color(0xFFE10600)
-    val AccentGlow = Color(0xFFFF2D2D)
-    val Highlight = Color(0xFF00D4FF)
-    val Text = Color(0xFFF0F2FF)
-    val TextSecondary = Color(0xFFA0A8C8)
-    val TextMuted = Color(0xFF6670A0)
-    val Success = Color(0xFF00E676)
-    val Warning = Color(0xFFFFAB00)
-    val Live = Color(0xFFE10600)
+    var dark by mutableStateOf(true)
+
+    private fun pick(d: Long, l: Long) = Color(if (dark) d else l)
+
+    val Bg get() = pick(0xFF0C0F1A, 0xFFF2F4FA)
+    val Surface get() = pick(0xFF131830, 0xFFFFFFFF)
+    val SurfaceLight get() = pick(0xFF1A2040, 0xFFE8EBF4)
+    val SurfaceLighter get() = pick(0xFF222850, 0xFFDDE1EE)
+    val Border get() = pick(0xFF252D55, 0xFFD3D8E8)
+    val BorderLight get() = pick(0xFF303A6A, 0xFFC0C7DC)
+    val Accent get() = Color(0xFFE10600)
+    val AccentGlow get() = Color(0xFFFF2D2D)
+    val Highlight get() = pick(0xFF00D4FF, 0xFF0088B0)
+    val Text get() = pick(0xFFF0F2FF, 0xFF0C0F1A)
+    val TextSecondary get() = pick(0xFFA0A8C8, 0xFF434B6B)
+    val TextMuted get() = pick(0xFF6670A0, 0xFF767E9F)
+    val Success get() = pick(0xFF00E676, 0xFF00994C)
+    val Warning get() = pick(0xFFFFAB00, 0xFFC27400)
+    val Live get() = Color(0xFFE10600)
 
     /** "glass-light" flattened onto the background. */
-    val Card = Color(0xFF0F1325)
-    val GlassBorder = Color(0x14FFFFFF)
-    val Bar = Color(0xF20C0F1C)
+    val Card get() = pick(0xFF0F1325, 0xFFFFFFFF)
+    val GlassBorder get() = pick(0x14FFFFFF, 0x170C0F1A)
+    val Bar get() = pick(0xF20C0F1C, 0xF5FFFFFF)
 }
 
 val Orbitron = FontFamily(
@@ -66,7 +76,7 @@ fun orbitron(size: TextUnit, weight: FontWeight = FontWeight.Bold, color: Color 
     TextStyle(fontFamily = Orbitron, fontSize = size, fontWeight = weight, color = color, letterSpacing = tracking.em)
 
 /** Small uppercase section label, like the PWA's "font-display text-xs tracking-widest". */
-val SectionLabel = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f)
+val SectionLabel: TextStyle get() = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f)
 
 val LocalFmt = staticCompositionLocalOf { Fmt(ZoneId.systemDefault(), false) }
 
@@ -81,7 +91,7 @@ fun sessionColor(name: String): Color = when {
 @Composable
 fun F1Theme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = darkColorScheme(
+        colorScheme = (if (C.dark) darkColorScheme() else androidx.compose.material3.lightColorScheme()).copy(
             primary = C.Accent,
             onPrimary = Color.White,
             secondary = C.Highlight,

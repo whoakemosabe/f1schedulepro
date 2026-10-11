@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The PWA's red F1 tile, for the launch screen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFE10600"
+        android:pathData="M37,29h34a8,8 0 0 1 8,8v34a8,8 0 0 1 -8,8h-34a8,8 0 0 1 -8,-8v-34a8,8 0 0 1 8,-8z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M43.32651006711409 62.5V45.5H54.88422818791946V48.78590604026846H47.354026845637584V53.098657718120805H54.14261744966443V56.316107382550335H47.354026845637584V62.5ZM64.6734899328859 45.5V62.5H60.65738255033557V49.00268456375839H60.54328859060403L56.72114093959732 51.638255033557044V48.1013422818792L60.50906040268457 45.5Z" />
+</vector>
