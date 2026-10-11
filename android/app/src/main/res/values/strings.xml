@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">F1 Pro</string>
+    <string name="widget_next_name">Next session</string>
+    <string name="widget_next_desc">Countdown to the next F1 session</string>
+    <string name="widget_weekend_name">Race weekend</string>
+    <string name="widget_weekend_desc">Every session of this race weekend</string>
+</resources>

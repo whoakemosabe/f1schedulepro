@@ -1,0 +1,138 @@
+name: Android APK
+
+# Builds the native app in android/. Pushes to main publish a signed release (v2.0.N) with
+# f1pro.apk attached; other branches are build checks. The PWA at the repo root is untouched.
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+              echo "::error::KEYSTORE_B64 / KEYSTORE_PASSWORD secrets are missing; refusing to publish a build with the wrong key."
+              exit 1
+            fi
+            echo "No signing secrets: debug-signed check build."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/f1pro-release.p12"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/f1pro-release.p12" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew --no-daemon testReleaseUnitTest 2>&1 | tee build.log
+
+      - name: Refresh the bundled calendar
+        # Fresh installs start with the real calendar even offline. Keeps the committed copy if
+        # the feed is down or a season isn't published yet.
+        continue-on-error: true
+        shell: bash
+        run: |
+          y=$(date -u +%Y)
+          for year in $y $((y + 1)); do
+            if curl -sfL --max-time 30 "https://api.jolpi.ca/ergast/f1/$year.json?limit=100" -o "$RUNNER_TEMP/cal.json" \
+              && jq -e '.MRData.RaceTable.Races | length > 0' "$RUNNER_TEMP/cal.json" > /dev/null; then
+              cp "$RUNNER_TEMP/cal.json" "app/src/main/assets/calendar-$year.json"
+              echo "Bundled calendar $year: $(jq '.MRData.RaceTable.Races | length' "$RUNNER_TEMP/cal.json") rounds"
+            else
+              echo "Calendar $year not available; keeping what's committed."
+            fi
+          done
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee -a build.log
+
+      # GitHub keeps 10 error annotations per step, so compile errors are reported in batches.
+      - name: Report errors (1-10)
+        if: failure()
+        shell: bash
+        run: |
+          grep -E "^e: |FAILED|error:|Exception|expected:<" build.log | sed 's#file:///home/runner/work/[^/]*/[^/]*/android/##' | awk '!seen[$0]++' > errors.txt || true
+          { echo '### Build errors'; echo '```'; head -200 errors.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          sed -n '1,10p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
+      - name: Report errors (11-20)
+        if: failure()
+        run: sed -n '11,20p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
+      - name: Report errors (21-30)
+        if: failure()
+        run: sed -n '21,30p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
+      - name: Report errors (31-40)
+        if: failure()
+        run: sed -n '31,40p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
+      - name: Report errors (41-50)
+        if: failure()
+        run: sed -n '41,50p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
+
+      - name: Name the APK
+        run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
+
+      - name: Live feed check
+        continue-on-error: true
+        env:
+          LIVE_CHECK: "1"
+        run: ./gradlew --no-daemon testReleaseUnitTest --tests app.f1pro.LiveCheck --rerun
+
+      - name: Keep the APK with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1pro-apk
+          path: android/f1pro.apk
+          retention-days: 14
+
+      - name: Release notes
+        run: |
+          {
+            echo "Tap **f1pro.apk** below on your phone to install or update."
+            echo
+            echo "F1 Schedule Pro 2.0 — the native Android app. Built from ${GITHUB_SHA}."
+            echo
+            cat app/build/live-check.md 2>/dev/null || echo "_Live feed check didn't complete._"
+          } > notes.md
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          name: F1 Schedule Pro 2.0.${{ github.run_number }}
+          body_path: android/notes.md
+          files: android/f1pro.apk
+          make_latest: true

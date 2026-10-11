@@ -1,0 +1,600 @@
+package app.f1pro.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.f1pro.Fmt
+import app.f1pro.R
+import app.f1pro.data.CircuitStats
+import app.f1pro.data.Planner
+import app.f1pro.data.Race
+import app.f1pro.data.RaceStatus
+import kotlinx.coroutines.launch
+
+@Composable
+fun SchedulePage(state: AppState, listState: LazyListState) {
+    val now = rememberNow(30_000)
+    val season = remember(state.seasons, now) { state.seasonFor(now) }
+    val races = season?.races.orEmpty()
+    var selected by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    // A tapped reminder opens its race.
+    LaunchedEffect(state.openRaceKey, races) {
+        val key = state.openRaceKey ?: return@LaunchedEffect
+        val i = races.indexOfFirst { it.key == key }
+        if (i >= 0) selected = i
+        state.openRaceKey = null
+    }
+
+    val statuses = remember(races, now) { races.map { it.status(now) } }
+    val highlighted = remember(races, statuses) {
+        statuses.indexOfFirst { it == RaceStatus.ACTIVE }.takeIf { it >= 0 }
+            ?: statuses.indexOfFirst { it == RaceStatus.UPCOMING }.takeIf { it >= 0 }
+            ?: races.lastIndex
+    }
+    val globalNext = remember(state.seasons, now) { Planner.next(state.seasons, now) }
+
+    val sel = selected
+    if (sel != null && sel in races.indices) {
+        BackHandler { selected = null }
+        RaceDetailPager(state, races, sel, globalNext?.session?.start, onBack = { selected = null })
+        return
+    }
+
+    // Open on the current/next race instead of the top, once.
+    var centered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(highlighted, races.size) {
+        if (!centered && highlighted >= 0) {
+            listState.scrollToItem(maxOf(0, highlighted - 1))
+            centered = true
+        }
+    }
+
+    if (races.isEmpty()) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("No calendar yet", style = inter(15.sp, FontWeight.SemiBold))
+            Text("Connect to the internet to load the season.", style = inter(13.sp, color = C.TextSecondary))
+        }
+        return
+    }
+
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Legend(C.Success, "DONE")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LiveDot(8.dp); Text("LIVE", style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.05f))
+                }
+                Legend(C.Highlight, "NEXT")
+                Spacer(Modifier.weight(1f))
+                val count = races.count { !it.isTesting }
+                Text("$count races", style = inter(11.sp, FontWeight.Medium, C.TextMuted.copy(alpha = 0.5f), 0.05f))
+            }
+        }
+        itemsIndexed(races, key = { _, r -> r.key }) { i, race ->
+            val status = statuses[i]
+            RaceCard(
+                race = race,
+                status = status,
+                stats = state.circuits[race.circuit.id],
+                now = now,
+                isNext = i == highlighted && status == RaceStatus.UPCOMING,
+                onClick = { selected = i },
+            )
+        }
+    }
+}
+
+@Composable
+private fun Legend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Dot(color, 8.dp)
+        Text(label, style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.05f))
+    }
+}
+
+private fun typeShort(type: String) = when (type) {
+    "permanent" -> "Perm"
+    "street" -> "Street"
+    "hybrid" -> "Hybrid"
+    else -> ""
+}
+
+@Composable
+private fun RaceCard(
+    race: Race,
+    status: RaceStatus,
+    stats: CircuitStats?,
+    now: Long,
+    isNext: Boolean,
+    onClick: () -> Unit,
+) {
+    val fmt = LocalFmt.current
+    val edge = when {
+        isNext -> C.Highlight
+        status == RaceStatus.ACTIVE -> C.Live
+        status == RaceStatus.COMPLETED -> C.Success.copy(alpha = 0.3f)
+        else -> C.BorderLight
+    }
+    val glow = if (status == RaceStatus.ACTIVE) {
+        val t = rememberInfiniteTransition(label = "glow")
+        t.animateFloat(0.15f, 0.3f, infiniteRepeatable(tween(1250, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "g").value
+    } else 0f
+    val ring = when {
+        isNext -> C.Highlight.copy(alpha = 0.25f)
+        status == RaceStatus.ACTIVE -> C.Live.copy(alpha = glow)
+        else -> null
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .alpha(if (status == RaceStatus.COMPLETED) 0.45f else 1f)
+            .then(if (ring != null) Modifier.border(1.dp, ring, CardShape) else Modifier)
+            .glassCard(edge)
+            .pressable(onClick)
+            .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(race.circuit.flag, style = inter(26.sp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(race.label, style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f))
+                if (stats?.night == true) Badge("NGT", C.Highlight.copy(alpha = 0.85f), icon = R.drawable.lc_moon, bgAlpha = 0.08f)
+                if (race.isSprint) Badge("SPR", C.Warning, icon = R.drawable.lc_zap)
+            }
+            Text(
+                race.name,
+                style = inter(15.sp, FontWeight.SemiBold, if (status == RaceStatus.COMPLETED) C.TextMuted else C.Text),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                Ic(R.drawable.lc_map_pin, C.TextMuted, 11.dp)
+                Spacer(Modifier.width(5.dp))
+                Text(race.circuit.locality, style = inter(12.sp, color = C.TextSecondary))
+                val t = stats?.type?.let { typeShort(it) }.orEmpty()
+                if (t.isNotEmpty()) Text(" · $t", style = inter(12.sp, color = C.TextMuted))
+            }
+            if (status == RaceStatus.ACTIVE) {
+                Row(Modifier.padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (s in race.sessions) Dot(if (s.start < now) C.Success else C.BorderLight, 6.dp)
+                }
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            when {
+                isNext -> Badge("NEXT", C.Highlight, bgAlpha = 0.15f, borderAlpha = 0.25f)
+                status == RaceStatus.ACTIVE -> Badge("LIVE", C.Live, leading = { LiveDot(6.dp) })
+                status == RaceStatus.COMPLETED -> Badge("COMPLETED", C.Success.copy(alpha = 0.8f), icon = R.drawable.lc_check)
+                else -> Badge("UPCOMING", C.TextMuted, bgAlpha = 0.25f, borderAlpha = 0.3f)
+            }
+            val raceSession = race.raceSession ?: race.sessions.last()
+            if (status == RaceStatus.UPCOMING) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Ic(R.drawable.lc_clock, C.TextMuted, 12.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(fmt.date(raceSession.start), style = inter(11.sp, color = C.TextMuted))
+                    }
+                    Row {
+                        Text(if (raceSession.tbc) "TBC" else fmt.time(raceSession.start), style = inter(11.sp, color = C.TextSecondary))
+                        Text(" " + fmt.abbr(raceSession.start), style = inter(11.sp, color = C.TextMuted))
+                    }
+                }
+            }
+            if (status == RaceStatus.ACTIVE) {
+                val ns = race.nextSession(now)
+                if (ns != null) {
+                    val tick = rememberNow(1000)
+                    val cd = Fmt.countdown(ns.start, tick)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(ns.name, style = inter(11.sp, color = C.TextMuted, tracking = 0.03f))
+                        val st = orbitron(14.sp, FontWeight.Bold, C.Live)
+                        val text = buildString {
+                            if (cd.days > 0) append("${cd.days}d ")
+                            if (cd.hours > 0) append("${cd.hours}h ")
+                            append(cd.minutes.toString().padStart(2, '0'))
+                            append(":")
+                            append(cd.seconds.toString().padStart(2, '0'))
+                        }
+                        FlipText(text, st)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Ic(R.drawable.lc_chevron_right, C.TextMuted.copy(alpha = 0.3f), 14.dp)
+    }
+}
+
+@Composable
+private fun RaceDetailPager(
+    state: AppState,
+    races: List<Race>,
+    start: Int,
+    globalNextStart: Long?,
+    onBack: () -> Unit,
+) {
+    val pager = rememberPagerState(initialPage = start) { races.size }
+    val scope = rememberCoroutineScope()
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(C.SurfaceLight.copy(alpha = 0.5f))
+                    .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+                    .clickable(onClick = onBack)
+                    .padding(start = 8.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ic(R.drawable.lc_chevron_left, C.TextMuted, 18.dp)
+                Spacer(Modifier.width(4.dp))
+                Text("Schedule", style = inter(13.sp, FontWeight.Medium, C.TextMuted))
+            }
+            Spacer(Modifier.weight(1f))
+            NavSquare(R.drawable.lc_chevron_left, enabled = pager.currentPage > 0) {
+                scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
+            }
+            Text(
+                races[pager.currentPage].label,
+                style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f),
+                modifier = Modifier.widthIn(min = 44.dp).padding(horizontal = 6.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            NavSquare(R.drawable.lc_chevron_right, enabled = pager.currentPage < races.lastIndex) {
+                scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
+            }
+        }
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+            RaceDetail(state, races[page], globalNextStart)
+        }
+    }
+}
+
+@Composable
+private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .alpha(if (enabled) 1f else 0.2f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(C.SurfaceLight.copy(alpha = 0.5f))
+            .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Ic(icon, C.TextMuted, 18.dp) }
+}
+
+private fun trackType(type: String) = when (type) {
+    "permanent" -> "Permanent"
+    "street" -> "Street Circuit"
+    "hybrid" -> "Hybrid"
+    else -> ""
+}
+
+@Composable
+private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
+    val context = LocalContext.current
+    val fmt = LocalFmt.current
+    val now = rememberNow(1000)
+    val status = race.status(now)
+    val stats = state.circuits[race.circuit.id]
+    val live = race.liveSession(now)
+    val next = race.nextSession(now)
+    val heroEdge = when (status) {
+        RaceStatus.COMPLETED -> C.Success.copy(alpha = 0.5f)
+        RaceStatus.ACTIVE -> C.Live
+        RaceStatus.UPCOMING -> C.Highlight
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // Hero
+        Column(
+            Modifier.fillMaxWidth().glassCard(heroEdge).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(race.circuit.flag, style = inter(36.sp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            if (race.isTesting) "PRE-SEASON" else "ROUND ${race.round}",
+                            style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f),
+                        )
+                        if (stats?.night == true) Badge("NIGHT", C.Highlight.copy(alpha = 0.85f), icon = R.drawable.lc_moon, bgAlpha = 0.08f)
+                        if (race.isSprint) Badge("SPRINT", C.Warning, icon = R.drawable.lc_zap)
+                    }
+                    Text(race.name, style = orbitron(18.sp, FontWeight.Bold, C.Text, 0.02f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            FadeLine()
+            race.officialName?.let {
+                Text(it, style = inter(11.sp, color = C.TextMuted, tracking = 0.15f))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Ic(R.drawable.lc_map_pin, C.Highlight, 13.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${race.circuit.name} — ${race.circuit.locality}, ${race.circuit.country}",
+                    style = inter(13.sp, color = C.TextSecondary),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            when {
+                status == RaceStatus.COMPLETED -> StatusBox(C.Success.copy(alpha = 0.2f), null) {
+                    Ic(R.drawable.lc_circle_check, C.Success, 32.dp)
+                    Text(if (race.isTesting) "TESTING COMPLETE" else "RACE COMPLETE", style = orbitron(13.sp, FontWeight.Bold, C.Success, 0.1f))
+                }
+                live != null -> StatusBox(C.Live.copy(alpha = 0.25f), C.Live.copy(alpha = 0.08f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LiveDot(10.dp)
+                        Text("LIVE", style = inter(11.sp, FontWeight.Bold, C.Live, 0.1f))
+                    }
+                    Text(live.name, style = orbitron(14.sp, FontWeight.Bold, sessionColor(live.name), 0.03f))
+                }
+                next != null && !next.tbc -> {
+                    val isGlobalNext = globalNextStart == next.start
+                    val color = if (isGlobalNext) sessionColor(next.name) else C.TextMuted
+                    val border = if (isGlobalNext) color.copy(alpha = 0.25f) else C.BorderLight
+                    val bg = if (isGlobalNext) color.copy(alpha = 0.06f) else null
+                    val cd = Fmt.countdown(next.start, now)
+                    StatusBox(border, bg) {
+                        Text("${next.name.uppercase()} STARTS IN", style = inter(11.sp, FontWeight.Medium, color, 0.2f))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            for ((v, l) in listOf(cd.days to "D", cd.hours to "H", cd.minutes to "M", cd.seconds to "S")) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    FlipText(v.toString().padStart(2, '0'), orbitron(24.sp, FontWeight.Bold, color))
+                                    Text(l, style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.1f), modifier = Modifier.padding(top = 4.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (stats != null) {
+                FadeLine()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Stat(R.drawable.lc_ruler, C.Highlight, stats.lengthKm.toString(), "km")
+                    Sep()
+                    Stat(R.drawable.lc_corner_down_right, C.Highlight, stats.turns.toString(), "turns")
+                    Sep()
+                    Stat(R.drawable.lc_zap, C.Warning, stats.drsZones.toString(), "DRS")
+                    Spacer(Modifier.weight(1f))
+                    Text(trackType(stats.type), style = inter(11.sp, FontWeight.Medium, C.TextMuted))
+                }
+                stats.lapRecord?.let { lr ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Ic(R.drawable.lc_trophy, C.Warning, 11.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Lap record", style = inter(11.sp, color = C.TextSecondary))
+                        Spacer(Modifier.weight(1f))
+                        Text(lr.time, style = orbitron(11.sp, FontWeight.Bold, C.Accent))
+                        Text("  |  ", style = inter(11.sp, color = C.TextMuted.copy(alpha = 0.4f)))
+                        Row(
+                            Modifier.clickable { openUrl(context, lr.driverUrl) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(lr.driver, style = inter(11.sp, color = C.TextSecondary))
+                            Text(" '" + lr.year.toString().takeLast(2), style = inter(11.sp, color = C.TextMuted))
+                            Spacer(Modifier.width(4.dp))
+                            Ic(R.drawable.lc_external_link, C.TextMuted.copy(alpha = 0.4f), 9.dp)
+                        }
+                    }
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(C.SurfaceLight)
+                        .border(1.dp, C.GlassBorder, RoundedCornerShape(6.dp))
+                        .clickable { openUrl(context, stats.wiki) }
+                        .padding(vertical = 7.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("View on Wikipedia", style = inter(11.sp, FontWeight.SemiBold, C.Highlight, 0.03f))
+                    Spacer(Modifier.width(6.dp))
+                    Ic(R.drawable.lc_external_link, C.Highlight, 11.dp)
+                }
+            }
+        }
+
+        // Sessions
+        Column(Modifier.fillMaxWidth().glassCard(C.Highlight.copy(alpha = 0.4f))) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Ic(R.drawable.lc_clock, C.TextMuted, 12.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("SESSIONS", style = SectionLabel)
+                Spacer(Modifier.weight(1f))
+                Text(fmt.abbr(now), style = inter(11.sp, FontWeight.Medium, C.Highlight, 0.05f))
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
+            race.sessions.forEachIndexed { i, s ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
+                val isLive = live?.name == s.name
+                val isPast = !isLive && s.start < now && !s.tbc
+                val isGlobalNext = globalNextStart != null && s.start == globalNextStart
+                val results = if (isPast) race.resultsUrl(s) else null
+                val rowBg = when {
+                    isLive -> C.Live.copy(alpha = 0.08f)
+                    isGlobalNext -> C.Highlight.copy(alpha = 0.08f)
+                    else -> Color.Transparent
+                }
+                val rowEdge = when {
+                    isLive -> C.Live
+                    isGlobalNext -> C.Highlight
+                    else -> Color.Transparent
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(rowBg)
+                        .drawBehind { drawRect(rowEdge, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) }
+                        .then(if (results != null) Modifier.clickable { openUrl(context, results) } else Modifier)
+                        .alpha(if (isPast) 0.4f else 1f)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    when {
+                        isLive -> LiveDot(10.dp)
+                        isPast -> Ic(R.drawable.lc_check, C.Success, 14.dp)
+                        s.name == "Race" -> Ic(R.drawable.lc_flag, C.Accent, 14.dp)
+                        s.name.contains("Sprint") -> Ic(R.drawable.lc_zap, C.Warning, 14.dp)
+                        s.name == "Qualifying" -> Ic(R.drawable.lc_crosshair, C.Highlight, 14.dp)
+                        else -> Ic(R.drawable.lc_circle_dot, C.Highlight.copy(alpha = 0.5f), 14.dp)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    val nameColor = when {
+                        isLive -> C.Live
+                        isPast -> C.TextMuted
+                        s.name == "Race" -> C.Text
+                        s.name.contains("Sprint") -> C.Warning
+                        s.name == "Qualifying" -> C.Highlight
+                        else -> C.TextSecondary
+                    }
+                    Text(
+                        s.name,
+                        style = inter(14.sp, if (isLive || s.name == "Race") FontWeight.SemiBold else FontWeight.Medium, nameColor)
+                            .copy(textDecoration = if (isPast) TextDecoration.LineThrough else null),
+                    )
+                    if (isGlobalNext && !isLive) {
+                        Spacer(Modifier.width(8.dp))
+                        Badge("NEXT", C.Highlight, bgAlpha = 0.12f)
+                    }
+                    if (results != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Ic(R.drawable.lc_external_link, C.TextMuted.copy(alpha = 0.5f), 10.dp)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            if (s.tbc) "TBC" else fmt.time(s.start),
+                            style = inter(13.sp, color = if (isLive) C.Live else if (isPast) C.TextMuted else C.TextSecondary)
+                                .copy(textDecoration = if (isPast) TextDecoration.LineThrough else null),
+                        )
+                        Text(fmt.date(s.start), style = inter(11.sp, color = C.TextMuted))
+                    }
+                    if (!isPast && !isLive) {
+                        Spacer(Modifier.width(8.dp))
+                        Ic(R.drawable.lc_clock, C.TextMuted.copy(alpha = 0.3f), 13.dp)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun StatusBox(border: Color, bg: Color?, content: @Composable () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 104.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg ?: C.Card)
+            .border(1.dp, border, RoundedCornerShape(8.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+    ) { content() }
+}
+
+@Composable
+private fun Stat(icon: Int, iconColor: Color, value: String, unit: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Ic(icon, iconColor, 11.dp)
+        Spacer(Modifier.width(4.dp))
+        Text(value, style = inter(11.sp, FontWeight.SemiBold, C.Text))
+        Text(" $unit", style = inter(11.sp, color = C.TextSecondary))
+    }
+}
+
+@Composable
+private fun Sep() {
+    Text("  |  ", style = inter(11.sp, color = C.BorderLight))
+}
