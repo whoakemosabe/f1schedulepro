@@ -68,7 +68,15 @@ private class FightLine(
     val dashed: Boolean,
     val points: List<Pair<Int, Double>>,
     val open: () -> Unit,
+    /** Why the last point isn't the race results' sum (a penalty), when it isn't. */
+    val note: String? = null,
 )
+
+/** The line ends on the standings' total; a difference becomes the line's note. */
+private fun snapped(code: String, color: Color, dashed: Boolean, pts: List<Pair<Int, Double>>, official: Double, open: () -> Unit): FightLine {
+    val s = DriverStats.snapTo(pts, official)
+    return FightLine(code, color, dashed, s.points, open, DriverStats.adjustmentNote(code, s.adjustment, pts.lastOrNull()?.first))
+}
 
 /**
  * The top five's points after every round, drivers or teams, at the top of Standings. Folds
@@ -90,7 +98,7 @@ fun TitleFightCard(state: AppState, st: Standings) {
             st.drivers.take(5).mapNotNull { d ->
                 val s = DriverStats.idFor(all.entries, d)?.let { all.drivers[it] } ?: return@mapNotNull null
                 val color = Color(Teams.color(d.teamId))
-                FightLine(d.code, color, dashed = !seen.add(d.teamId), points = s.cumulative()) { state.sheetDriver = d }
+                snapped(d.code, color, !seen.add(d.teamId), s.cumulative(), d.points) { state.sheetDriver = d }
             }
         } else {
             st.teams.take(5).map { t ->
@@ -104,7 +112,7 @@ fun TitleFightCard(state: AppState, st: Standings) {
                     var sum = 0.0
                     pts = per.map { (round, p) -> sum += p; round to sum }
                 }
-                FightLine(Teams.shortName(t.teamName).take(3).uppercase(), Color(Teams.color(t.teamId)), false, pts) { state.sheetTeam = t }
+                snapped(Teams.shortName(t.teamName).take(3).uppercase(), Color(Teams.color(t.teamId)), false, pts, t.points) { state.sheetTeam = t }
             }
         }
     }
@@ -133,7 +141,8 @@ fun TitleFightCard(state: AppState, st: Standings) {
         ) {
             Ic(R.drawable.lc_trophy, C.Warning, 14.dp)
             Spacer(Modifier.width(8.dp))
-            Text("TITLE FIGHT · TOP 5", style = SectionLabel, modifier = Modifier.weight(1f))
+            val off = remember(st.season, state.seasons) { app.f1pro.data.Planner.offSeason(state.seasons, st.season, System.currentTimeMillis()) }
+            Text(if (off != null) "FINAL ${st.season} · TOP 5" else "TITLE FIGHT · TOP 5", style = SectionLabel, modifier = Modifier.weight(1f))
             if (!open && lines.isNotEmpty()) {
                 // Folded: the leaders' codes still show.
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -158,6 +167,7 @@ fun TitleFightCard(state: AppState, st: Standings) {
                         }
                     }
                     FightChart(lines, key = teams)
+                    for (n in lines.mapNotNull { it.note }) Text(n, style = inter(10.sp, color = C.Warning))
                 }
             }
         }

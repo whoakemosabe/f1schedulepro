@@ -237,9 +237,22 @@ class Repo(context: Context) {
         coroutineScope {
             val d = async { Net.get("$F1API/drivers-championship", "application/json") }
             val t = async { try { Net.get("$F1API/constructors-championship", "application/json") } catch (e: Exception) { "" } }
-            val driversJson = d.await()
-            val teamsJson = t.await()
-            val (season, drivers) = Parsers.drivers(driversJson)
+            var driversJson = d.await()
+            var teamsJson = t.await()
+            var (season, drivers) = Parsers.drivers(driversJson)
+            // New year, no race yet: the feed's "current" is a table of zeros. Show last season's
+            // final standings until the first race scores.
+            if (drivers.isNotEmpty() && drivers.all { it.points == 0.0 }) {
+                try {
+                    val prev = "${F1API.substringBeforeLast('/')}/${season - 1}"
+                    val pd = Net.get("$prev/drivers-championship", "application/json")
+                    val (ps, pDrivers) = Parsers.drivers(pd)
+                    if (pDrivers.any { it.points > 0 }) {
+                        driversJson = pd; season = ps; drivers = pDrivers
+                        teamsJson = try { Net.get("$prev/constructors-championship", "application/json") } catch (e: Exception) { "" }
+                    }
+                } catch (e: Exception) { }
+            }
             if (drivers.isEmpty()) throw IOException("No standings yet")
             val teams = (if (teamsJson.isNotBlank()) try { Parsers.teams(teamsJson) } catch (e: Exception) { emptyList() } else emptyList())
                 .ifEmpty { Parsers.teamsFromDrivers(drivers) }

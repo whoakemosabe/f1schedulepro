@@ -243,7 +243,7 @@ object DriverStats {
                         fastestRank = res.optJSONObject("FastestLap")?.optString("rank")?.toIntOrNull(),
                         sprintFinish = sp?.first,
                         sprintPoints = sp?.second ?: 0.0,
-                        constructorId = res.optJSONObject("Constructor")?.optString("constructorId").orEmpty(),
+                        constructorId = Teams.canonical(res.optJSONObject("Constructor")?.optString("constructorId").orEmpty()),
                     )
                 }
             }
@@ -275,6 +275,41 @@ object DriverStats {
         var sum = 0.0
         return per.map { (round, pts) -> sum += pts; round to sum }
     }
+
+    /** A chart line that ends on the official total, and by how much that moved it. */
+    data class Snapped(val points: List<Pair<Int, Double>>, val adjustment: Double)
+
+    /**
+     * The race results add up to one total; the standings (penalties, corrections) can say
+     * another. The standings are the truth: the line's last point moves onto them, and the
+     * difference is kept so the chart can say why.
+     */
+    fun snapTo(points: List<Pair<Int, Double>>, official: Double): Snapped {
+        if (points.isEmpty()) return Snapped(points, 0.0)
+        val adj = official - points.last().second
+        if (kotlin.math.abs(adj) < 0.5) return Snapped(points, 0.0)
+        return Snapped(points.dropLast(1) + (points.last().first to official), adj)
+    }
+
+    /** "Includes a −10 pt penalty after R14" (or a correction the other way); null when none. */
+    fun adjustmentNote(who: String, adj: Double, round: Int?): String? {
+        if (kotlin.math.abs(adj) < 0.5) return null
+        val n = kotlin.math.abs(adj).let { if (it % 1.0 == 0.0) it.toLong().toString() else String.format(java.util.Locale.US, "%.1f", it) }
+        val what = if (adj < 0) "a −$n pt penalty" else "a +$n pt correction"
+        return "$who: official total includes $what" + (round?.let { " after R$it" } ?: "")
+    }
+
+    /** Standings without a code ("NOR") get the one the race results use for that driver. */
+    fun withCodes(drivers: List<DriverStanding>, stats: SeasonStats): List<DriverStanding> = drivers.map { d ->
+        if (d.shortCode != null) d
+        else idFor(stats.entries, d)?.let { stats.drivers[it]?.code }
+            ?.trim()?.takeIf { it.length == 3 && it.all(Char::isLetter) }
+            ?.let { d.copy(shortCode = it.uppercase()) } ?: d
+    }
+
+    /** Codes shared by more than one driver (they'd be indistinguishable on the chips). */
+    fun duplicateCodes(drivers: List<DriverStanding>): Map<String, List<String>> =
+        drivers.groupBy { it.code }.filterValues { it.size > 1 }.mapValues { (_, v) -> v.map { it.surname } }
 
     fun headToHead(a: DriverSeason, b: DriverSeason): HeadToHead {
         val bBy = b.rounds.associateBy { it.round }

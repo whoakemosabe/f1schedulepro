@@ -624,10 +624,12 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
 
         // Below the hero, the cards arrive one by one as the race card opens into the page.
         var order = 1
-        // After qualifying, until the race is run: the grid it set.
-        val quali = state.results[race.key]?.quali.orEmpty()
-        if (!race.isTesting && quali.isNotEmpty() && raceResults.isEmpty()) Box(Modifier.enterStagger(order++)) { GridCard(state, race, quali) }
+        // The grid: qualifying's (provisional) until the race runs, then the one it started from.
+        val wk = state.results[race.key]
+        val grids = remember(wk) { if (wk == null) emptyList() else app.f1pro.data.Grids.of(wk.race, wk.sprint, wk.quali) }
+        if (!race.isTesting && grids.isNotEmpty() && raceResults.isEmpty()) Box(Modifier.enterStagger(order++)) { GridCard(state, race, grids) }
         if (!race.isTesting && status != RaceStatus.UPCOMING) Box(Modifier.enterStagger(order++)) { ResultsCard(state, race, now) }
+        if (!race.isTesting && grids.isNotEmpty() && raceResults.isNotEmpty()) Box(Modifier.enterStagger(order++)) { GridCard(state, race, grids) }
         if (forecast != null) Box(Modifier.enterStagger(order++)) { WeatherCard(state, race, forecast) }
         if (!race.isTesting) Box(Modifier.enterStagger(order++)) { TrackCard(race.circuit.id, race.circuit.name) }
 

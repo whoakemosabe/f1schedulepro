@@ -390,6 +390,18 @@ private fun ThisWeekend(state: AppState, st: Standings, d: DriverStanding, seaso
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        val now = System.currentTimeMillis()
+        val off = remember(st.season, state.seasons) { app.f1pro.data.Planner.offSeason(state.seasons, st.season, now) }
+        if (off != null) {
+            // Between seasons: how this one ended, and when the next starts.
+            Text("FINAL ${off.finished}", style = inter(10.sp, FontWeight.Bold, readable(color, C.SurfaceLight), 0.12f))
+            Text(
+                if (d.position == 1) "Champion with ${Fmt.points(d.points)} points." else "Finished P${d.position} with ${Fmt.points(d.points)} points.",
+                style = inter(13.sp, FontWeight.SemiBold, C.Text),
+            )
+            Text(seasonStartsLine(off, now), style = inter(12.sp, color = C.TextSecondary))
+            return@Column
+        }
         if (race != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("NEXT UP", style = inter(10.sp, FontWeight.Bold, readable(color, C.SurfaceLight), 0.12f))
@@ -432,6 +444,17 @@ private fun ThisWeekend(state: AppState, st: Standings, d: DriverStanding, seaso
     }
 }
 
+/** "2027 season starts in 142 days" (or tomorrow, or once the calendar is out). */
+fun seasonStartsLine(off: app.f1pro.data.Planner.OffSeason, now: Long): String {
+    val year = off.nextYear ?: (off.finished + 1)
+    return when (val days = off.days(now)) {
+        null -> if (off.nextYear == null) "$year calendar not out yet." else "$year season under way."
+        0 -> "$year season starts today."
+        1 -> "$year season starts tomorrow."
+        else -> "$year season starts in $days days."
+    }
+}
+
 @Composable
 private fun Highlights(s: DriverSeason) {
     val gained = s.placesGained
@@ -465,10 +488,17 @@ private fun GapCard(
     color: Color,
     rivalColor: Color,
 ) {
-    val a = mine.cumulative().toMap()
-    val b = theirs.cumulative().toMap()
+    // Both lines end on the standings' totals (penalties the race results don't show).
+    val snapA = DriverStats.snapTo(mine.cumulative(), me.points)
+    val snapB = DriverStats.snapTo(theirs.cumulative(), rival.points)
+    val a = snapA.points.toMap()
+    val b = snapB.points.toMap()
     val rounds = (a.keys + b.keys).distinct().sorted()
     if (rounds.isEmpty()) return
+    val notes = listOfNotNull(
+        DriverStats.adjustmentNote(me.code, snapA.adjustment, snapA.points.lastOrNull()?.first),
+        DriverStats.adjustmentNote(rival.code, snapB.adjustment, snapB.points.lastOrNull()?.first),
+    )
     // Totals after each round (a round someone missed keeps their last total).
     var la = 0.0; var lb = 0.0
     val rows = rounds.map { r -> a[r]?.let { la = it }; b[r]?.let { lb = it }; Triple(r, la, lb) }
@@ -602,6 +632,8 @@ private fun GapCard(
             )
         }
         needs?.let { Text(it, style = inter(12.sp, FontWeight.Medium, if (gapNow > left) C.Warning else C.TextSecondary)) }
+        if (needs == null && ahead.racesLeft == 0) Text("Final ${st.season} standings", style = inter(12.sp, FontWeight.Medium, C.TextSecondary))
+        for (n in notes) Text(n, style = inter(10.sp, color = C.Warning))
     }
 }
 
@@ -717,6 +749,16 @@ private fun ColumnScope.TeamPanel(state: AppState, st: Standings, t: TeamStandin
         StatTile("POINTS", Fmt.points(t.points))
         StatTile("WINS", t.wins.toString())
         StatTile("PODIUMS", if (seasons.isNotEmpty() && seasons.all { it != null }) seasons.sumOf { it!!.podiums }.toString() else "–")
+    }
+    // The race results don't know this team by the standings' id: say so rather than guess.
+    val all = state.seasonAll
+    if (all != null && all.season == st.season && t.points > 0 &&
+        DriverStats.teamCumulative(all.drivers.values, t.teamId).all { it.second == 0.0 }
+    ) {
+        Text(
+            "Race results list this team under a different name, so its charts use its current drivers' results. Totals are the official standings.",
+            style = inter(11.sp, color = C.Warning),
+        )
     }
 
     PanelLabel("DRIVERS")

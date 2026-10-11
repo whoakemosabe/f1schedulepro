@@ -360,8 +360,11 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         seasonStats[season] = stats
         if (standings?.season == season) seasonAll = stats
         if (stats.fetchedAt > 0) seasonDataAt[season] = stats.fetchedAt
-        val st = standings ?: return
+        var st = standings ?: return
         if (st.season != season) return
+        // Codes the standings feed left out come from the race results ("ANT", not "KIM").
+        val coded = app.f1pro.data.DriverStats.withCodes(st.drivers, stats)
+        if (coded != st.drivers) { st = st.copy(drivers = coded); standings = st }
         for (d in st.drivers) {
             val id = app.f1pro.data.DriverStats.idFor(stats.entries, d) ?: continue
             stats.drivers[id]?.let { driverSeasons[driverKey(season, d)] = it }
@@ -483,7 +486,9 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         standingsError = null
         scope.launch {
             try {
-                standings = repo.fetchStandings()
+                standings = repo.fetchStandings().let { f ->
+                    seasonStats[f.season]?.let { f.copy(drivers = app.f1pro.data.DriverStats.withCodes(f.drivers, it)) } ?: f
+                }
                 scope.launch(Dispatchers.IO) { try { Widgets.updateAll(context) } catch (e: Exception) { } }
             } catch (e: Exception) {
                 if (standings == null) standingsError = e.message ?: "Failed to load standings"

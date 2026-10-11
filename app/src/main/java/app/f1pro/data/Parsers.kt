@@ -192,7 +192,7 @@ object Parsers {
                 number = drv.optString("number").takeIf { it.isNotBlank() && it != "null" },
                 shortCode = drv.optString("shortName").trim().takeIf { it.length == 3 && it.all(Char::isLetter) },
                 driverId = (d.optString("driverId").ifBlank { drv.optString("driverId") }).trim().takeIf { it.isNotBlank() && it != "null" },
-                teamId = d.optString("teamId").ifBlank { team.optString("teamId") },
+                teamId = Teams.canonical(d.optString("teamId").ifBlank { team.optString("teamId") }),
                 teamName = team.optString("teamName"),
             )
         }.sortedBy { it.position }
@@ -209,7 +209,7 @@ object Parsers {
                 position = t.optInt("position", i + 1),
                 points = t.optDouble("points", 0.0).let { if (it.isNaN()) 0.0 else it },
                 wins = t.optInt("wins"),
-                teamId = t.optString("teamId"),
+                teamId = Teams.canonical(t.optString("teamId")),
                 teamName = team.optString("teamName"),
             )
         }.sortedBy { it.position }
@@ -370,7 +370,7 @@ object ResultParsers {
                 givenName = d.optString("givenName"),
                 familyName = d.optString("familyName"),
                 nationality = d.optString("nationality"),
-                constructorId = c.optString("constructorId"),
+                constructorId = Teams.canonical(c.optString("constructorId")),
                 constructorName = c.optString("name"),
                 grid = int(o, "grid"),
                 laps = int(o, "laps") ?: 0,
@@ -395,7 +395,7 @@ object ResultParsers {
                 code = d.optString("code").ifBlank { d.optString("familyName").take(3).uppercase() },
                 givenName = d.optString("givenName"),
                 familyName = d.optString("familyName"),
-                constructorId = c.optString("constructorId"),
+                constructorId = Teams.canonical(c.optString("constructorId")),
                 constructorName = c.optString("name"),
                 q1 = str(o, "Q1"),
                 q2 = str(o, "Q2"),
@@ -425,7 +425,7 @@ object ResultParsers {
                         pos,
                         d.optString("code").ifBlank { d.optString("familyName").take(3).uppercase() },
                         d.optString("familyName"),
-                        o.optJSONObject("Constructor")?.optString("constructorId").orEmpty(),
+                        Teams.canonical(o.optJSONObject("Constructor")?.optString("constructorId").orEmpty()),
                     )
                 }
             }

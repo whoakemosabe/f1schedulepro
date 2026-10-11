@@ -52,6 +52,31 @@ object Teams {
         "audi" to "audi", "cadillac" to "cadillac",
     )
 
+    /**
+     * The two feeds (Jolpica's constructorId, f1api's teamId) have named some teams differently
+     * over the years. Every id read from either goes through here, so "racing_bulls" and "rb"
+     * are one team. Only spellings of the same team: Sauber and Audi stay apart (different seasons).
+     */
+    private val ALIASES = mapOf(
+        "racing_bulls" to "rb", "visa_rb" to "rb", "rb_f1_team" to "rb", "visa_cash_app_rb" to "rb",
+        "redbull" to "red_bull", "red_bull_racing" to "red_bull",
+        "kick_sauber" to "sauber", "stake" to "sauber", "stake_f1_team" to "sauber",
+        "aston" to "aston_martin", "astonmartin" to "aston_martin",
+        "haas_f1_team" to "haas", "alpine_f1_team" to "alpine", "bwt_alpine" to "alpine",
+        "audi_f1_team" to "audi", "audi_revolut" to "audi",
+        "cadillac_f1_team" to "cadillac", "cadillac_formula_1_team" to "cadillac",
+        "mercedes_amg" to "mercedes", "scuderia_ferrari" to "ferrari",
+    )
+
+    /** One id per team whichever feed it came from ("Racing-Bulls" → "rb"). */
+    fun canonical(id: String): String {
+        val k = id.trim().lowercase().replace('-', '_').replace(' ', '_')
+        return ALIASES[k] ?: k
+    }
+
+    /** Ids this app knows (for the release check's mismatch list). */
+    val known: Set<String> get() = COLORS.keys
+
     /** Official broadcast colours from OpenF1, when fetched; they win over the built-in ones. */
     @Volatile var live: Map<String, Long> = emptyMap()
 

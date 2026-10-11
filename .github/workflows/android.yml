@@ -109,12 +109,20 @@ jobs:
         run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
 
       - name: Live feed check
-        # Releases only; branch builds are just compile-and-test checks.
-        if: github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
           LIVE_CHECK: "1"
         run: ./gradlew testDebugUnitTest --tests app.f1pro.LiveCheck --rerun
+
+      - name: Data the app shows as fact
+        # Every ❌ line (photos, codes, team ids, driver matching) becomes an error on the run.
+        if: always()
+        run: |
+          f=app/build/live-check.md
+          [ -f "$f" ] || f=build/live-check.md
+          [ -f "$f" ] || { echo "::warning::No live check report"; exit 0; }
+          grep '❌' "$f" | sed 's/^- ❌ //' | while IFS= read -r l; do echo "::error title=Live data::$l"; done
+          grep '✅\|⚠️' "$f" | sed 's/^- //' | while IFS= read -r l; do echo "::notice title=Live data::$l"; done
 
       - name: Keep the APK with the run
         uses: actions/upload-artifact@v4

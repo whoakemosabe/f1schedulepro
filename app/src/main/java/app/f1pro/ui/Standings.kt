@@ -97,7 +97,8 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
             contentPadding = pagePadding(),
             verticalArrangement = Arrangement.spacedBy(PageGap),
         ) {
-            if (st != null && calendarYear != null && st.season in 1 until calendarYear) {
+            val off = st?.let { app.f1pro.data.Planner.offSeason(state.seasons, it.season, System.currentTimeMillis()) }
+            if (st != null && (off != null || (calendarYear != null && st.season in 1 until calendarYear))) {
                 item {
                     Row(
                         Modifier.fillMaxWidth()
@@ -109,9 +110,10 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                         Ic(R.drawable.lc_info, C.Warning, 18.dp, Modifier.padding(top = 2.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("${st.season} Season Standings", style = inter(14.sp, FontWeight.SemiBold, C.Warning))
+                            Text("Final ${st.season} standings", style = inter(14.sp, FontWeight.SemiBold, C.Warning))
                             Text(
-                                "The $calendarYear season hasn't scored points yet. Standings update automatically.",
+                                (off?.let { seasonStartsLine(it, System.currentTimeMillis()) + " " } ?: "") +
+                                    "Standings switch over after its first race.",
                                 style = inter(12.sp, color = C.TextSecondary),
                             )
                         }

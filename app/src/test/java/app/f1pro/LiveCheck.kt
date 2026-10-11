@@ -20,6 +20,8 @@ class LiveCheck {
         assumeTrue(System.getenv("LIVE_CHECK") == "1")
         val lines = ArrayList<String>()
         fun line(ok: Boolean, text: String) { lines += (if (ok) "✅ " else "⚠️ ") + text }
+        // Data the app shows as fact: a miss here fails loudly (CI turns ❌ into an error).
+        fun must(ok: Boolean, text: String) { lines += (if (ok) "✅ " else "❌ ") + text }
 
         val now = System.currentTimeMillis()
         val year = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).year
@@ -73,9 +75,38 @@ class LiveCheck {
             val heads = app.f1pro.data.DriverStats.headshots(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
             val noData = standing.filter { d -> app.f1pro.data.DriverStats.idFor(all.entries, d)?.let { all.drivers[it] } == null }.map { it.code }
             val noPhoto = standing.filter { app.f1pro.data.DriverStats.headshotFor(heads, it) == null }.map { it.code }
-            line(noData.isEmpty() && noPhoto.isEmpty(), "Every driver matched: ${standing.size} in standings" +
+            must(noData.isEmpty() && noPhoto.isEmpty(), "Every driver matched: ${standing.size} in standings" +
                 (if (noData.isNotEmpty()) "; no season data for ${noData.joinToString(", ")}" else "") +
                 (if (noPhoto.isNotEmpty()) "; no photo for ${noPhoto.joinToString(", ")}" else ""))
+            // Codes: the standings' own, else the race results'; no two drivers may share one.
+            val coded = app.f1pro.data.DriverStats.withCodes(standing, all)
+            val fromResults = coded.count { it.shortCode != null } - standing.count { it.shortCode != null }
+            val dupes = app.f1pro.data.DriverStats.duplicateCodes(coded)
+            must(dupes.isEmpty(), "Driver codes: ${coded.size} unique" + (if (fromResults > 0) ", $fromResults from race results" else "") +
+                (if (dupes.isNotEmpty()) "; shared: " + dupes.entries.joinToString("; ") { "${it.key} = ${it.value.joinToString("/")}" } else ""))
+            // Photos: every sharpened link must actually load (the CDN path is unofficial).
+            val broken = ArrayList<String>()
+            var loaded = 0
+            for (d in standing) {
+                val u = app.f1pro.data.DriverStats.headshotFor(heads, d) ?: continue
+                val sharp = app.f1pro.data.DriverStats.sharperHeadshot(u)
+                val ok = try { Net.bytes(sharp).size > 2_000 } catch (e: Exception) { false }
+                if (ok) loaded++ else broken += d.code
+            }
+            must(broken.isEmpty() && loaded == standing.size, "Sharp photos: $loaded of ${standing.size} load" +
+                (if (broken.isNotEmpty()) "; broken for ${broken.joinToString(", ")}" else ""))
+            // Teams: both feeds must name every team the same way (after the translation table).
+            val f1apiTeams = Parsers.teams(Net.get("${Repo.F1API}/constructors-championship")).map { it.teamId }.toSet()
+            val jolpicaTeams = Regex("\"constructorId\"\\s*:\\s*\"([^\"]+)\"")
+                .findAll(Net.get("${Repo.JOLPICA}/$year/constructorStandings.json")).map { app.f1pro.data.Teams.canonical(it.groupValues[1]) }.toSet()
+            val onlyF1api = f1apiTeams - jolpicaTeams
+            val onlyJolpica = jolpicaTeams - f1apiTeams
+            val unknown = (f1apiTeams + jolpicaTeams) - app.f1pro.data.Teams.known
+            must(jolpicaTeams.isEmpty() || (onlyF1api.isEmpty() && onlyJolpica.isEmpty()),
+                "Team ids: ${f1apiTeams.size} in both feeds" +
+                    (if (onlyF1api.isNotEmpty()) "; standings only: ${onlyF1api.joinToString(", ")}" else "") +
+                    (if (onlyJolpica.isNotEmpty()) "; results only: ${onlyJolpica.joinToString(", ")}" else ""))
+            if (unknown.isNotEmpty()) line(false, "Teams without a built-in colour: ${unknown.joinToString(", ")}")
         } catch (e: Exception) { line(false, "Season data: ${e.message}") }
         try {
             // The driver panel: the standings leader's season, round by round, and vs teammate.

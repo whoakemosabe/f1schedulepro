@@ -14,6 +14,24 @@ object Planner {
         return sorted.firstOrNull { s -> s.races.any { it.endsAt > now } } ?: sorted.lastOrNull()
     }
 
+    /** A season whose races are all run, and when the next one starts (if its calendar is out). */
+    data class OffSeason(val finished: Int, val nextYear: Int?, val nextStart: Long?) {
+        /** Whole days until the next season's first race, rounded up; null before its calendar is out. */
+        fun days(now: Long): Int? = nextStart?.let { ((it - now + 86_399_999L) / 86_400_000L).toInt().coerceAtLeast(0) }
+    }
+
+    /**
+     * Null while [season] still has a race to run. Between seasons: that season (final),
+     * and the next one's first race, until that race starts.
+     */
+    fun offSeason(seasons: List<SeasonCalendar>, season: Int, now: Long): OffSeason? {
+        val races = seasons.firstOrNull { it.year == season }?.races.orEmpty().filter { !it.isTesting }
+        if (races.isEmpty() || races.any { (it.raceSession?.end ?: it.endsAt) > now }) return null
+        val next = seasons.filter { it.year > season }.minByOrNull { it.year }
+        val first = next?.races?.filter { !it.isTesting }?.mapNotNull { it.raceSession?.start }?.minOrNull()
+        return OffSeason(season, next?.year, first?.takeIf { it > now })
+    }
+
     fun slots(seasons: List<SeasonCalendar>): List<Slot> =
         seasons.sortedBy { it.year }
             .flatMap { s -> s.races.flatMap { r -> r.sessions.map { Slot(r, it) } } }
