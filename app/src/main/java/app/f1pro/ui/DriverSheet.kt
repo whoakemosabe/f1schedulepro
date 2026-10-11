@@ -78,6 +78,7 @@ import app.f1pro.data.DriverStats
 import app.f1pro.data.Standings
 import app.f1pro.data.TeamStanding
 import app.f1pro.data.Teams
+import coil3.request.crossfade
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
