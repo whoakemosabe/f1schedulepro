@@ -55,6 +55,21 @@ class LiveCheck {
             }
         } catch (e: Exception) { line(false, "Results: ${e.message}") }
         try {
+            // The driver panel: the standings leader's season, round by round, and vs teammate.
+            val entries = app.f1pro.data.DriverStats.entries(Net.get("${Repo.JOLPICA}/$year/driverStandings.json"))
+            val lead = entries.firstOrNull()
+            if (lead == null) line(true, "Driver panel: no $year standings yet")
+            else {
+                val season = app.f1pro.data.DriverStats.season(
+                    year, lead.id,
+                    Net.get("${Repo.JOLPICA}/$year/drivers/${lead.id}/results.json?limit=100"),
+                    Net.get("${Repo.JOLPICA}/$year/drivers/${lead.id}/qualifying.json?limit=100"),
+                )
+                line(season.rounds.isNotEmpty(), "Driver panel: ${lead.family} ${season.rounds.size} races, ${season.podiums} podiums, " +
+                    "${season.rounds.count { it.quali != null }} quali, #${season.number ?: "?"}")
+            }
+        } catch (e: Exception) { line(false, "Driver panel: ${e.message}") }
+        try {
             val f = app.f1pro.data.ResultParsers.forecast(
                 Net.get("https://api.open-meteo.com/v1/forecast?latitude=30.1328&longitude=-97.6411&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16"),
                 now,

@@ -195,6 +195,31 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     /** Bumped when official team colours arrive, so coloured stripes redraw. */
     var teamColoursVersion by mutableLongStateOf(0L)
+
+    // ── Driver / team panel (Standings) ──
+
+    /** The driver or team whose panel is open. */
+    var sheetDriver by mutableStateOf<app.f1pro.data.DriverStanding?>(null)
+    var sheetTeam by mutableStateOf<app.f1pro.data.TeamStanding?>(null)
+    val driverSeasons = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.DriverSeason>()
+    val driverSeasonLoading = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun driverKey(season: Int, d: app.f1pro.data.DriverStanding) =
+        "$season-" + app.f1pro.data.Names.norm(d.surname) + "-" + app.f1pro.data.Names.norm(d.name).take(6)
+
+    fun loadDriverSeason(season: Int, d: app.f1pro.data.DriverStanding) {
+        val k = driverKey(season, d)
+        if (driverSeasonLoading[k] == true || driverSeasons.containsKey(k)) return
+        driverSeasonLoading[k] = true
+        scope.launch {
+            try {
+                repo.driverSeason(season, d.name, d.surname)?.let { driverSeasons[k] = it }
+            } catch (e: Exception) {
+            } finally {
+                driverSeasonLoading[k] = false
+            }
+        }
+    }
         private set
 
     init {

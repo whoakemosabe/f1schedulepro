@@ -230,6 +230,38 @@ class Repo(context: Context) {
         } catch (e: Exception) { null }
     }
 
+    // ── Driver season (for the driver panel) ──
+
+    private fun driverFile(season: Int, key: String) = File(dir, "driver-$season-$key.json")
+
+    /**
+     * A driver's season round by round, found by name. Cached for 3 hours (6 hours on a
+     * failed refresh: the cached copy is still shown). Null when the season has no races yet.
+     */
+    suspend fun driverSeason(season: Int, given: String, family: String, force: Boolean = false): DriverSeason? = withContext(Dispatchers.IO) {
+        val key = Names.norm(family) + "-" + Names.norm(given).take(6)
+        val f = driverFile(season, key)
+        fun fromCache(): DriverSeason? = try {
+            val o = JSONObject(f.readText())
+            DriverStats.season(season, o.getString("id"), o.getString("results"), o.optString("quali"))
+        } catch (e: Exception) { null }
+        if (!force && f.exists() && System.currentTimeMillis() - f.lastModified() < 3 * HOUR_MS) fromCache()?.let { return@withContext it }
+        try {
+            val entries = DriverStats.entries(Net.get("$JOLPICA/$season/driverStandings.json", "application/json"))
+            val id = DriverStats.findId(entries, given, family) ?: return@withContext fromCache()
+            coroutineScope {
+                val r = async { Net.get("$JOLPICA/$season/drivers/$id/results.json?limit=100", "application/json") }
+                val q = async { try { Net.get("$JOLPICA/$season/drivers/$id/qualifying.json?limit=100", "application/json") } catch (e: Exception) { "" } }
+                val results = r.await()
+                val quali = q.await()
+                f.writeText(JSONObject().put("id", id).put("results", results).put("quali", quali).toString())
+                DriverStats.season(season, id, results, quali)
+            }
+        } catch (e: Exception) {
+            fromCache()
+        }
+    }
+
     // ── Podiums (for the race cards) ──
 
     private fun podiumFile(season: Int) = File(dir, "podiums-$season.json")

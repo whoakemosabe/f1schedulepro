@@ -62,6 +62,8 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     var view by remember { mutableStateOf(state.prefs.standingsView) }
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val st = state.standings
+    // The driver / team panel (a sheet over everything, so where it sits here doesn't matter).
+    st?.let { StandingsSheets(state, it) }
     val fav = state.favourite
     state.teamColoursVersion // redraw when the official team colours arrive
     val now = rememberNow(60_000)
@@ -113,7 +115,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
 
             val favRow = fav?.let { f -> st?.drivers?.firstOrNull { f.matches(it.name, it.surname) } }
             if (fav != null) {
-                item { FavouriteCard(state, fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) }
+                item { FavouriteCard(state, fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) { favRow?.let { Haptics.tap(hv); state.sheetDriver = it } } }
             }
 
             item {
@@ -149,13 +151,21 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 view == "drivers" -> {
                     val leader = st.drivers.firstOrNull()?.points ?: 0.0
                     items(st.drivers, key = { "d-" + it.surname + it.position }) { d ->
-                        DriverRow(d, leader, fav?.matches(d.name, d.surname) == true) { openUrl(context, it) }
+                        DriverRow(
+                            d, leader, fav?.matches(d.name, d.surname) == true,
+                            onDriver = { Haptics.tap(hv); state.sheetDriver = d },
+                            onTeam = { Haptics.tap(hv); state.sheetTeam = st.teams.firstOrNull { it.teamId == d.teamId } ?: return@DriverRow },
+                        )
                     }
                 }
                 else -> {
                     val leader = st.teams.firstOrNull()?.points ?: 0.0
                     items(st.teams, key = { "t-" + it.teamId }) { t ->
-                        TeamCard(t, st.drivers.filter { it.teamId == t.teamId }, leader, fav) { openUrl(context, it) }
+                        TeamCard(
+                            t, st.drivers.filter { it.teamId == t.teamId }, leader, fav,
+                            onTeam = { Haptics.tap(hv); state.sheetTeam = t },
+                            onDriver = { Haptics.tap(hv); state.sheetDriver = it },
+                        )
                     }
                 }
             }
@@ -174,7 +184,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
 }
 
 @Composable
-private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (String) -> Unit) {
+private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, onDriver: () -> Unit, onTeam: () -> Unit) {
     val color = Color(Teams.color(d.teamId))
     val behind = if (d.points < leader) leader - d.points else 0.0
     Row(
@@ -183,6 +193,7 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (
             .then(if (isFav) Modifier.border(1.dp, color.copy(alpha = 0.55f), CardShape) else Modifier)
             .glassCard(fill = if (isFav) androidx.compose.ui.graphics.lerp(C.Card, color, 0.1f) else C.Card)
             .leftEdge(color)
+            .pressable(onDriver)
             .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -191,16 +202,12 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (
         Flag(Countries.code(d.nationality), 24.dp, 16.dp, 2.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row(Modifier.tap { open(d.url) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(d.name, style = inter(14.sp, FontWeight.SemiBold), maxLines = 1)
                 Text(" " + d.surname, style = inter(14.sp, color = C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(4.dp))
-                Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
             }
-            Row(Modifier.tap { Teams.url(d.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.tap(onClick = onTeam), verticalAlignment = Alignment.CenterVertically) {
                 Text(d.teamName.uppercase(), style = inter(11.sp, FontWeight.Medium, readable(color), 0.05f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(4.dp))
-                Ic(R.drawable.lc_external_link, C.TextMuted, 8.dp)
             }
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -214,7 +221,14 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (
 }
 
 @Composable
-private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Double, fav: app.f1pro.data.Favourite?, open: (String) -> Unit) {
+private fun TeamCard(
+    t: TeamStanding,
+    drivers: List<DriverStanding>,
+    leader: Double,
+    fav: app.f1pro.data.Favourite?,
+    onTeam: () -> Unit,
+    onDriver: (DriverStanding) -> Unit,
+) {
     val color = Color(Teams.color(t.teamId))
     val behind = if (t.points < leader) leader - t.points else 0.0
     val favTeam = fav != null && fav.teamId == t.teamId
@@ -226,15 +240,13 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
             .leftEdge(color)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().tap(onClick = onTeam).padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(t.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted))
             Spacer(Modifier.width(10.dp))
-            Row(Modifier.weight(1f).tap { Teams.url(t.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(t.teamName.uppercase(), style = inter(14.sp, FontWeight.Bold, readable(color), 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(4.dp))
-                Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
             }
             Text(Fmt.points(t.points), style = orbitron(14.sp, FontWeight.Bold, C.Text))
             Text(" pts", style = inter(11.sp, color = C.TextMuted))
@@ -243,12 +255,10 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
         for (d in drivers) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
             Row(
-                Modifier.fillMaxWidth().tap { open(d.url) }.padding(start = 16.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                Modifier.fillMaxWidth().tap { onDriver(d) }.padding(start = 16.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${d.name} ${d.surname}", style = inter(13.sp, color = C.TextSecondary))
-                Spacer(Modifier.width(4.dp))
-                Ic(R.drawable.lc_external_link, C.TextMuted, 9.dp)
                 Spacer(Modifier.weight(1f))
                 Text(Fmt.points(d.points), style = inter(13.sp, FontWeight.SemiBold, C.Text))
             }
@@ -264,6 +274,7 @@ private fun FavouriteCard(
     row: DriverStanding?,
     leader: DriverStanding?,
     second: DriverStanding?,
+    onOpen: () -> Unit,
 ) {
     var picking by remember { mutableStateOf(false) }
     val color = Color(Teams.color(row?.teamId ?: fav.teamId))
@@ -272,6 +283,7 @@ private fun FavouriteCard(
         Modifier
             .fillMaxWidth()
             .clip(shape)
+            .tap(onClick = onOpen)
             .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(color.copy(alpha = 0.16f), color.copy(alpha = 0.02f))))
             .border(1.dp, color.copy(alpha = 0.4f), shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
