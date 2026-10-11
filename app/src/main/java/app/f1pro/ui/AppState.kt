@@ -223,7 +223,10 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         careerFailed.remove(driverId)
         scope.launch {
             try {
-                val c = repo.driverCareer(driverId, season)
+                val now = System.currentTimeMillis()
+                val races = seasons.firstOrNull { it.year == season }?.races.orEmpty()
+                val over = races.isNotEmpty() && races.all { (it.raceSession?.end ?: 0L) < now }
+                val c = repo.driverCareer(driverId, season, over)
                 if (c != null) careers[driverId] = c else careerFailed[driverId] = true
             } catch (e: Exception) {
                 careerFailed[driverId] = true
@@ -232,6 +235,33 @@ class AppState(context: Context, private val scope: CoroutineScope) {
             }
         }
     }
+
+    /** circuitId-driverId → that driver's record at the track. */
+    val trackRecords = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.TrackRecord>()
+    private val trackLoading = HashSet<String>()
+
+    fun loadTrackRecord(circuitId: String, driverId: String) {
+        val k = "$circuitId-$driverId"
+        if (trackRecords.containsKey(k) || !trackLoading.add(k)) return
+        scope.launch {
+            try { repo.trackRecord(circuitId, driverId)?.let { trackRecords[k] = it } } catch (e: Exception) { }
+            finally { trackLoading.remove(k) }
+        }
+    }
+
+    /** For the This weekend card: the season's next (or current) race and what's left to score. */
+    data class Ahead(val race: app.f1pro.data.Race?, val racesLeft: Int, val sprintsLeft: Int)
+
+    fun ahead(season: Int, now: Long = System.currentTimeMillis()): Ahead {
+        val races = seasons.firstOrNull { it.year == season }?.races.orEmpty().filter { !it.isTesting }
+        val next = races.firstOrNull { (it.raceSession?.end ?: 0L) > now }
+        val left = races.filter { (it.raceSession?.start ?: 0L) > now }
+        val sprintsLeft = races.count { r -> r.sessions.any { it.name == "Sprint" && it.start > now } }
+        return Ahead(next, left.size, sprintsLeft)
+    }
+
+    /** Opens the compare panel for [a]; [b] is picked there. */
+    var compare by mutableStateOf<Pair<app.f1pro.data.DriverStanding, app.f1pro.data.DriverStanding?>?>(null)
 
     fun headshotUrl(family: String): String? = repo.headshotUrl(family)
     suspend fun image(url: String): ByteArray? = repo.image(url)

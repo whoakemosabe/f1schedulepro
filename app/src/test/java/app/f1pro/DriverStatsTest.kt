@@ -119,4 +119,33 @@ class DriverStatsTest {
         assertEquals(listOf(100, 200, 300), DriverStats.pageOffsets(350))
         assertEquals(emptyList<Int>(), DriverStats.pageOffsets(100))
     }
+
+    @Test
+    fun championTrackRecordAndPointsLeft() {
+        assertEquals("max_verstappen", DriverStats.champion("""{"MRData":{"StandingsTable":{"StandingsLists":[{"season":"2021","DriverStandings":[{"Driver":{"driverId":"max_verstappen"}}]}]}}}"""))
+        assertEquals(null, DriverStats.champion("""{"MRData":{"StandingsTable":{"StandingsLists":[]}}}"""))
+        val t = DriverStats.trackRecord("""{"MRData":{"RaceTable":{"Races":[
+            {"season":"2016","Results":[{"positionText":"R","grid":"4"}]},
+            {"season":"2021","Results":[{"positionText":"1","grid":"1"}]},
+            {"season":"2024","Results":[{"positionText":"3","grid":"2"}]}]}}}""")
+        assertEquals(3, t.starts); assertEquals(1, t.wins); assertEquals(2, t.podiums); assertEquals(1, t.best)
+        assertEquals(2024, t.lastBefore(2026)?.season)
+        assertEquals(2021, t.lastBefore(2024)?.season)
+        assertEquals(25 * 6 + 8 * 2, DriverStats.pointsLeft(6, 2))
+    }
+
+    @Test
+    fun sprintWithoutARaceStillShowsTheRound() {
+        val results = """{"MRData":{"total":"1","RaceTable":{"Races":[{"round":"1","raceName":"Race 1","Results":[
+            {"position":"1","positionText":"1","points":"25","Driver":{"driverId":"a","givenName":"A","familyName":"Aa"}}]}]}}}"""
+        val sprint = """{"MRData":{"RaceTable":{"Races":[{"round":"2","raceName":"Race 2","SprintResults":[
+            {"positionText":"3","points":"6","Driver":{"driverId":"a"}}]}]}}}"""
+        val s = DriverStats.seasonAll(2025, listOf(results), emptyList(), listOf(sprint))
+        val a = s.drivers.getValue("a")
+        assertEquals(listOf(1, 2), a.rounds.map { it.round })
+        assertEquals("Race 2", a.rounds[1].raceName)
+        assertNull(a.rounds[1].finish)
+        assertEquals(6.0, a.rounds[1].sprintPoints, 0.0)
+        assertEquals(31.0, a.totalPoints, 0.0)
+    }
 }

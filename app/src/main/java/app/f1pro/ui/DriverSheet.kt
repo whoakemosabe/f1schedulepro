@@ -1,19 +1,13 @@
 package app.f1pro.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,32 +16,50 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,11 +75,13 @@ import app.f1pro.data.DriverStats
 import app.f1pro.data.Standings
 import app.f1pro.data.TeamStanding
 import app.f1pro.data.Teams
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /*
- * Tapping a driver (or a team) on Standings opens a panel from the bottom instead of the F1
- * website: numbers, the season round by round, and the teammate head-to-head. The website is
- * still one tap away at the bottom.
+ * Tapping a driver (or a team) on Standings opens a panel from the bottom: a header that stays
+ * put (photo, numbers, tabs) over Season / Rounds / Career, a Compare panel for any two
+ * drivers, and the F1 website one tap away at the bottom.
  */
 
 @Composable
@@ -76,27 +90,34 @@ fun StandingsSheets(state: AppState, st: Standings) {
     val t = state.sheetTeam
     when {
         // Keyed so switching from a team to one of its drivers slides a fresh panel up.
-        d != null -> androidx.compose.runtime.key("d-" + d.surname) { SlideSheet(onDismiss = { state.sheetDriver = null }) { DriverPager(state, st, d) } }
-        t != null -> androidx.compose.runtime.key("t-" + t.teamId) { SlideSheet(onDismiss = { state.sheetTeam = null }) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) { TeamPanel(state, st, t) }
-        } }
+        d != null -> key("d-" + d.surname) { SlideSheet(onDismiss = { state.sheetDriver = null }) { DriverPager(state, st, d) } }
+        t != null -> key("t-" + t.teamId) {
+            SlideSheet(onDismiss = { state.sheetTeam = null }) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) { TeamPanel(state, st, t) }
+            }
+        }
+    }
+    // Compare slides up over the driver panel; closing it goes back to that driver.
+    state.compare?.let { (a, _) ->
+        key("c-" + a.surname) { SlideSheet(onDismiss = { state.compare = null }) { ComparePanel(state, st, a) } }
     }
 }
 
-/** Swipe left / right for the next or previous driver in the standings. */
+/** Swipe left / right for the next or previous driver; the chosen tab stays as you swipe. */
 @Composable
 private fun DriverPager(state: AppState, st: Standings, first: DriverStanding) {
     val drivers = st.drivers
     val start = drivers.indexOfFirst { it.name == first.name && it.surname == first.surname }.coerceAtLeast(0)
     val pager = rememberPagerState(initialPage = start) { drivers.size }
     val view = androidx.compose.ui.platform.LocalView.current
+    var tab by remember { mutableIntStateOf(0) }
     LaunchedEffect(pager.settledPage) { if (pager.settledPage != start) Haptics.segment(view) }
     Column(Modifier.fillMaxWidth().fillMaxHeight()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -106,16 +127,7 @@ private fun DriverPager(state: AppState, st: Standings, first: DriverStanding) {
         }
         Spacer(Modifier.height(10.dp))
         HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), beyondViewportPageCount = 1) { page ->
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                DriverPanel(state, st, drivers[page], active = page == pager.settledPage)
-            }
+            DriverPanel(state, st, drivers[page], active = page == pager.settledPage, tab = tab, onTab = { tab = it })
         }
     }
 }
@@ -123,8 +135,11 @@ private fun DriverPager(state: AppState, st: Standings, first: DriverStanding) {
 private fun teammateOf(st: Standings, d: DriverStanding): DriverStanding? =
     st.drivers.filter { it.teamId == d.teamId && !(it.name == d.name && it.surname == d.surname) }.maxByOrNull { it.points }
 
+/** A different shade of [c] for a second line or bar (two drivers of one team). */
+private fun shade(c: Color): Color = lerp(c, if (C.dark) Color.White else Color.Black, 0.45f)
+
 @Composable
-private fun ColumnScope.DriverPanel(state: AppState, st: Standings, d: DriverStanding, active: Boolean) {
+private fun DriverPanel(state: AppState, st: Standings, d: DriverStanding, active: Boolean, tab: Int, onTab: (Int) -> Unit) {
     val context = LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
     val color = Color(Teams.color(d.teamId))
@@ -132,95 +147,128 @@ private fun ColumnScope.DriverPanel(state: AppState, st: Standings, d: DriverSta
     // The championship rival: the leader, or P2 when this is the leader.
     val rival = if (d.position == 1) st.drivers.getOrNull(1) else st.drivers.firstOrNull()
     LaunchedEffect(d) { state.loadDriverSeason(st.season, d) }
-    LaunchedEffect(mate) { mate?.let { state.loadDriverSeason(st.season, it) } }
-    LaunchedEffect(rival) { rival?.let { state.loadDriverSeason(st.season, it) } }
     val season = state.driverSeasons[state.driverKey(st.season, d)]
     val mateSeason = mate?.let { state.driverSeasons[state.driverKey(st.season, it)] }
     val rivalSeason = rival?.let { state.driverSeasons[state.driverKey(st.season, it)] }
     val loading = state.driverSeasonLoading[state.driverKey(st.season, d)] == true
-    // Career totals take a few requests: only for the driver actually on screen.
-    LaunchedEffect(season?.driverId, active) { if (active) season?.driverId?.let { state.loadCareer(it, st.season) } }
-    val career = season?.driverId?.let { state.careers[it] }
+    // Career totals and the track record take requests: only for the driver on screen.
+    LaunchedEffect(season?.driverId, active, tab) { if (active && tab == 2) season?.driverId?.let { state.loadCareer(it, st.season) } }
 
-    PhotoHeader(state, d, color, season?.number)
-
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatTile("POSITION", "P${d.position}")
-        StatTile("POINTS", Fmt.points(d.points))
-        StatTile("WINS", d.wins.toString())
-        StatTile("PODIUMS", season?.podiums?.toString() ?: "–")
-    }
-
-    PanelLabel("FORM · ${st.season}")
-    when {
-        season != null && season.rounds.isNotEmpty() -> {
-            FormChart(listOf(season to color))
-            val bits = listOfNotNull(
-                season.bestFinish?.let { "Best P$it" },
-                season.avgQuali?.let { "Avg grid P" + String.format(java.util.Locale.US, "%.1f", it) },
-                "${season.dnfs} DNF" + if (season.dnfs == 1) "" else "s",
-            )
-            Text(bits.joinToString(" · "), style = inter(12.sp, color = C.TextSecondary))
+    Column(Modifier.fillMaxSize()) {
+        // Stays put: photo, the four numbers, the tabs.
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PhotoHeader(state, d, color, season?.number)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile("POSITION", "P" + counted(d.position.toDouble(), from = 22.0) { it.roundToInt().toString() })
+                StatTile("POINTS", counted(d.points) { Fmt.points(it) })
+                StatTile("WINS", counted(d.wins.toDouble()) { it.roundToInt().toString() })
+                StatTile("PODIUMS", season?.let { s -> counted(s.podiums.toDouble()) { it.roundToInt().toString() } } ?: "–")
+            }
+            SlidingSegments(listOf("SEASON", "ROUNDS", "CAREER"), tab, Modifier.fillMaxWidth()) { onTab(it) }
         }
-        loading -> Skeleton(150.dp)
-        else -> Text("No race results for ${d.surname} this season yet.", style = inter(12.sp, color = C.TextMuted))
-    }
-
-    if (season != null && season.rounds.isNotEmpty()) {
-        PanelLabel("SEASON HIGHLIGHTS")
-        Highlights(season)
-    }
-
-    if (season != null && rivalSeason != null && rival != null && season.rounds.isNotEmpty()) {
-        PanelLabel(if (d.position == 1) "LEAD OVER ${rival.surname.uppercase()}" else "GAP TO ${rival.surname.uppercase()}")
-        GapChart(DriverStats.gap(season, rivalSeason), color, leader = d.position == 1, rivalName = rival.surname)
-    }
-
-    if (mate != null) {
-        PanelLabel("VS TEAMMATE")
-        HeadToHeadBlock(d, mate, season, mateSeason, color)
-        if (season != null && mateSeason != null) DuelStrip(DriverStats.duels(season, mateSeason), color, d.surname, mate.surname)
-    }
-
-    if (season != null && season.rounds.isNotEmpty()) {
-        PanelLabel("EVERY ROUND")
-        RoundList(state, st.season, season, color)
-    }
-
-    PanelLabel("CAREER")
-    val careerId = season?.driverId
-    when {
-        career != null -> CareerBox(career)
-        careerId != null && state.careerFailed[careerId] == true -> Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Couldn't load career stats.", style = inter(12.sp, color = C.TextMuted), modifier = Modifier.weight(1f))
-            Chip("Retry", icon = R.drawable.lc_refresh_cw, iconColor = C.AccentText) { state.loadCareer(careerId, st.season, retry = true) }
-        }
-        careerId == null && !loading -> Text("Career stats show once they've raced this season.", style = inter(12.sp, color = C.TextMuted))
-        else -> Skeleton(110.dp)
-    }
-
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val isFav = state.favourite?.matches(d.name, d.surname) == true
-        Chip(
-            if (isFav) "Your driver" else "Make my driver",
-            modifier = Modifier.weight(1f),
-            icon = R.drawable.lc_star,
-            iconColor = C.Highlight,
-            selected = isFav,
+        Spacer(Modifier.height(12.dp))
+        // Scrolls: the chosen tab.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (!isFav) {
-                Haptics.confirm(view)
-                state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))
+            when (tab) {
+                0 -> {
+                    ThisWeekend(state, st, d, season, active, color)
+                    PanelLabel("FORM · ${st.season}")
+                    when {
+                        season != null && season.rounds.isNotEmpty() -> {
+                            FormChart(listOf(season to color), listOf(d.surname))
+                            val bits = listOfNotNull(
+                                season.bestFinish?.let { "Best P$it" },
+                                season.avgQuali?.let { "Avg grid P" + String.format(java.util.Locale.US, "%.1f", it) },
+                                "${season.dnfs} DNF" + if (season.dnfs == 1) "" else "s",
+                            )
+                            Text(bits.joinToString(" · "), style = inter(12.sp, color = C.TextSecondary))
+                        }
+                        loading -> Skeleton(150.dp)
+                        else -> Text("No race results for ${d.surname} this season yet.", style = inter(12.sp, color = C.TextMuted))
+                    }
+                    if (season != null && season.rounds.isNotEmpty()) {
+                        PanelLabel("SEASON HIGHLIGHTS")
+                        Highlights(season)
+                    }
+                    if (season != null && rivalSeason != null && rival != null && season.rounds.isNotEmpty()) {
+                        PanelLabel(if (d.position == 1) "LEAD OVER ${rival.surname.uppercase()}" else "GAP TO ${rival.surname.uppercase()}")
+                        GapChart(DriverStats.gap(season, rivalSeason), color, leader = d.position == 1, rivalName = rival.surname)
+                    }
+                    if (mate != null) {
+                        PanelLabel("VS TEAMMATE")
+                        HeadToHeadBlock(d, mate, season, mateSeason, color)
+                        if (season != null && mateSeason != null) DuelStrip(DriverStats.duels(season, mateSeason), color, shade(color), d.surname, mate.surname)
+                    }
+                }
+                1 -> when {
+                    season != null && season.rounds.isNotEmpty() -> RoundList(state, st.season, season, color)
+                    loading -> Skeleton(300.dp)
+                    else -> Text("No rounds for ${d.surname} this season yet.", style = inter(12.sp, color = C.TextMuted))
+                }
+                else -> {
+                    val careerId = season?.driverId
+                    val career = careerId?.let { state.careers[it] }
+                    when {
+                        career != null -> CareerBox(career)
+                        careerId != null && state.careerFailed[careerId] == true -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Couldn't load career stats.", style = inter(12.sp, color = C.TextMuted), modifier = Modifier.weight(1f))
+                            Chip("Retry", icon = R.drawable.lc_refresh_cw, iconColor = C.AccentText) { state.loadCareer(careerId, st.season, retry = true) }
+                        }
+                        careerId == null && !loading -> Text("Career stats show once they've raced this season.", style = inter(12.sp, color = C.TextMuted))
+                        else -> Skeleton(180.dp)
+                    }
+                }
+            }
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val isFav = state.favourite?.matches(d.name, d.surname) == true
+                Chip(
+                    if (isFav) "Your driver" else "My driver",
+                    modifier = Modifier.weight(1f),
+                    icon = R.drawable.lc_star,
+                    iconColor = C.Highlight,
+                    selected = isFav,
+                ) {
+                    if (!isFav) {
+                        Haptics.confirm(view)
+                        state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))
+                    }
+                }
+                Chip("Compare", modifier = Modifier.weight(1f), icon = R.drawable.lc_users, iconColor = C.Highlight) {
+                    Haptics.tap(view)
+                    state.compare = d to null
+                }
+                Chip("F1 profile", modifier = Modifier.weight(1f), icon = R.drawable.lc_external_link) { openUrl(context, d.url) }
             }
         }
-        Chip("F1 profile", modifier = Modifier.weight(1f), icon = R.drawable.lc_external_link) { openUrl(context, d.url) }
     }
 }
 
-/** Team-colour band with the official headshot, the number large behind, name and team. */
+/** A number that counts up to [target] the first time it shows (and moves to new values). */
+@Composable
+private fun counted(target: Double, from: Double = 0.0, format: (Double) -> String): String {
+    val a = remember { Animatable(from.toFloat()) }
+    LaunchedEffect(target) { a.animateTo(target.toFloat(), tween(800, easing = FastOutSlowInEasing)) }
+    val v = a.value.toDouble()
+    return if (abs(v - target) < 0.01) format(target) else format(kotlin.math.round(v))
+}
+
+/**
+ * The header: team livery in diagonal stripes, the number large and slanted behind, the
+ * official headshot cut out on the right, the name bottom left. Always on dark, so the white
+ * type reads in both themes.
+ */
 @Composable
 private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number: String?) {
-    val url = androidx.compose.runtime.remember(d.surname) { state.headshotUrl(d.surname) }
+    val url = remember(d.surname) { state.headshotUrl(d.surname) }
     val photo by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
         value = url?.let { u ->
             state.image(u)?.let { bytes ->
@@ -228,21 +276,42 @@ private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number
             }
         }
     }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
+    val deep = lerp(color, Color.Black, 0.72f)
+    val light = lerp(color, Color.White, 0.25f)
     Box(
         Modifier
             .fillMaxWidth()
-            .height(150.dp)
+            .height(168.dp)
             .clip(shape)
-            .background(Brush.linearGradient(listOf(lerp(color, Color.Black, 0.15f), lerp(color, Color.Black, 0.6f))))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
+            .background(Brush.linearGradient(listOf(lerp(color, Color.Black, 0.45f), deep)))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
     ) {
+        // Livery: three slanted bands across the right half, then a soft glow behind the photo.
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val slant = h * 0.55f
+            fun band(x: Float, width: Float, c: Color) {
+                drawPath(Path().apply {
+                    moveTo(x + slant, 0f); lineTo(x + slant + width, 0f); lineTo(x + width, h); lineTo(x, h); close()
+                }, c)
+            }
+            band(w * 0.44f, w * 0.20f, color.copy(alpha = 0.9f))
+            band(w * 0.66f, w * 0.06f, light.copy(alpha = 0.85f))
+            band(w * 0.75f, w * 0.012f, Color.White.copy(alpha = 0.55f))
+            band(w * 0.79f, w * 0.30f, color.copy(alpha = 0.55f))
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent), center = Offset(w * 0.78f, h * 0.55f), radius = h * 0.8f),
+                radius = h * 0.8f, center = Offset(w * 0.78f, h * 0.55f),
+            )
+        }
         (d.number ?: number)?.let {
             Text(
                 it,
-                style = orbitron(120.sp, FontWeight.Black, Color.White.copy(alpha = 0.16f)),
+                style = orbitron(118.sp, FontWeight.Black, Color.White.copy(alpha = 0.2f)).copy(fontStyle = FontStyle.Italic),
                 maxLines = 1,
-                modifier = Modifier.align(Alignment.CenterEnd).offset(x = (-8).dp),
+                modifier = Modifier.align(Alignment.CenterStart).offset(x = 120.dp, y = (-6).dp),
             )
         }
         photo?.let {
@@ -251,20 +320,88 @@ private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number
                 contentDescription = "${d.name} ${d.surname}",
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.BottomEnd,
-                modifier = Modifier.align(Alignment.BottomEnd).fillMaxHeight().wrapContentWidth().padding(end = 8.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).fillMaxHeight().wrapContentWidth().padding(top = 8.dp, end = 4.dp),
             )
         }
-        // Darken the left so the name stays readable over any team colour.
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent))))
-        Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
-            Text(d.name, style = inter(14.sp, color = Color.White.copy(alpha = 0.85f)), maxLines = 1)
-            Text(d.surname.uppercase(), style = orbitron(22.sp, FontWeight.Bold, Color.White, 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(4.dp))
+        // Darken the left so the name stays readable over any livery.
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.55f to Color.Transparent)))
+        Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            Text(d.name, style = inter(13.sp, color = Color.White.copy(alpha = 0.85f)), maxLines = 1)
+            Text(d.surname.uppercase(), style = orbitron(24.sp, FontWeight.Black, Color.White, 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Flag(Countries.code(d.nationality), 18.dp, 12.dp, 2.dp)
                 Spacer(Modifier.width(6.dp))
-                Text(d.teamName, style = inter(12.sp, FontWeight.SemiBold, Color.White.copy(alpha = 0.9f)), maxLines = 1)
+                Text(d.teamName, style = inter(12.sp, FontWeight.SemiBold, Color.White.copy(alpha = 0.92f)), maxLines = 1)
             }
+        }
+    }
+}
+
+/**
+ * Next up: this driver's record at the coming track, last year's result there, and the
+ * championship maths with what's left to score.
+ */
+@Composable
+private fun ThisWeekend(state: AppState, st: Standings, d: DriverStanding, season: DriverSeason?, active: Boolean, color: Color) {
+    val ahead = remember(st.season, state.seasons) { state.ahead(st.season) }
+    val race = ahead.race
+    val driverId = season?.driverId
+    LaunchedEffect(race?.circuit?.id, driverId, active) {
+        if (active && race != null && driverId != null) state.loadTrackRecord(race.circuit.id, driverId)
+    }
+    val record = if (race != null && driverId != null) state.trackRecords["${race.circuit.id}-$driverId"] else null
+    val leader = st.drivers.firstOrNull()
+    val second = st.drivers.getOrNull(1)
+    val left = DriverStats.pointsLeft(ahead.racesLeft, ahead.sprintsLeft)
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(C.SurfaceLight)
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (race != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("NEXT UP", style = inter(10.sp, FontWeight.Bold, readable(color, C.SurfaceLight), 0.12f))
+                Spacer(Modifier.width(8.dp))
+                Flag(race.circuit.countryCode, 18.dp, 12.dp, 2.dp)
+                Spacer(Modifier.width(6.dp))
+                Text(race.name.replace("Grand Prix", "GP"), style = inter(13.sp, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val trackLine = when {
+                record == null -> "Loading their record at ${race.circuit.name}…"
+                record.starts == 0 -> "First race at ${race.circuit.name}."
+                else -> listOfNotNull(
+                    "${record.starts} start" + if (record.starts == 1) "" else "s",
+                    record.wins.takeIf { it > 0 }?.let { "$it win" + if (it == 1) "" else "s" },
+                    record.podiums.takeIf { it > 0 }?.let { "$it podium" + if (it == 1) "" else "s" },
+                    record.best?.let { "best P$it" },
+                ).joinToString(" · ") + " here"
+            }
+            Text(trackLine, style = inter(12.sp, color = C.TextSecondary))
+            record?.lastBefore(st.season + 1)?.takeIf { it.season < st.season || ahead.racesLeft > 0 }?.let { last ->
+                val res = last.finish?.let { "P$it" } ?: "DNF"
+                val grid = last.grid?.takeIf { it > 0 }?.let { " from P$it" } ?: ""
+                Text("Last time (${last.season}): $res$grid", style = inter(12.sp, color = C.TextSecondary))
+            }
+        }
+        // Championship maths.
+        if (leader != null) {
+            val gap = leader.points - d.points
+            val text = when {
+                ahead.racesLeft == 0 && d.position == 1 -> "Champion."
+                ahead.racesLeft == 0 -> "Season over: P${d.position}."
+                d.position == 1 && second != null && d.points - second.points > left ->
+                    "Champion already: ${Fmt.points(d.points - second.points)} ahead with $left left."
+                d.position == 1 && second != null -> "Leads by ${Fmt.points(d.points - second.points)} with $left points left."
+                gap > left -> "Out of the title fight: ${Fmt.points(gap)} behind, $left points left."
+                else -> "Still in it: ${Fmt.points(gap)} behind ${leader.surname}, $left points left."
+            }
+            Text(text, style = inter(12.sp, FontWeight.SemiBold, C.Text))
         }
     }
 }
@@ -274,21 +411,21 @@ private fun Highlights(s: DriverSeason) {
     val gained = s.placesGained
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("POLES", s.poles.toString())
-            StatTile("FASTEST LAPS", s.fastestLaps.toString())
-            StatTile("SPRINT PTS", Fmt.points(s.sprintPoints))
+            StatTile("POLES", counted(s.poles.toDouble()) { it.roundToInt().toString() })
+            StatTile("FASTEST LAPS", counted(s.fastestLaps.toDouble()) { it.roundToInt().toString() })
+            StatTile("SPRINT PTS", counted(s.sprintPoints) { Fmt.points(it) })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile("PTS / RACE", String.format(java.util.Locale.US, "%.1f", s.pointsPerRace))
-            StatTile("PLACES GAINED", (if (gained > 0) "+" else "") + gained)
-            StatTile("POINTS STREAK", s.pointsStreak.toString())
+            StatTile("PLACES GAINED", (if (gained > 0) "+" else "") + counted(gained.toDouble()) { it.roundToInt().toString() })
+            StatTile("POINTS STREAK", counted(s.pointsStreak.toDouble()) { it.roundToInt().toString() })
         }
     }
 }
 
 /**
- * Points behind the leader after each round (or ahead of P2, for the leader). The line sits
- * above zero when behind.
+ * Points behind the leader after each round (or ahead of P2, for the leader). Tap the chart
+ * to read a round. The line sits above zero when behind.
  */
 @Composable
 private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean, rivalName: String) {
@@ -303,9 +440,25 @@ private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean
     }
     val zero = C.TextMuted
     val grid = C.GlassBorder
+    val ring = C.Surface
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+    var sel by remember(gap) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(text, style = inter(13.sp, FontWeight.SemiBold, C.Text))
-        Canvas(Modifier.fillMaxWidth().height(90.dp)) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(90.dp)
+                .pointerInput(gap) {
+                    detectTapGestures { p ->
+                        val pad = 6.dp.toPx()
+                        val w = size.width - pad * 2
+                        val i = if (gap.size == 1) 0 else (((p.x - pad) / w) * (gap.size - 1)).roundToInt().coerceIn(0, gap.lastIndex)
+                        sel = if (sel == i) null else i
+                    }
+                }
+        ) {
             val pad = 6.dp.toPx()
             val w = size.width - pad * 2
             val h = size.height - pad * 2
@@ -325,25 +478,43 @@ private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean
                 else { line.lineTo(x(i), y(v)); area.lineTo(x(i), y(v)) }
             }
             area.lineTo(x(vals.lastIndex), y(0.0)); area.close()
-            drawPath(area, color.copy(alpha = 0.18f))
-            drawPath(line, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            drawCircle(color, 3.5.dp.toPx(), Offset(x(vals.lastIndex), y(vals.last())))
+            clipRect(right = pad + w * progress.value + 4.dp.toPx()) {
+                drawPath(area, color.copy(alpha = 0.18f))
+                drawPath(line, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawCircle(color, 3.5.dp.toPx(), Offset(x(vals.lastIndex), y(vals.last())))
+            }
+            sel?.let { i ->
+                drawLine(zero.copy(alpha = 0.5f), Offset(x(i), pad), Offset(x(i), pad + h), 1.dp.toPx())
+                drawCircle(ring, 6.dp.toPx(), Offset(x(i), y(vals[i])))
+                drawCircle(color, 4.5.dp.toPx(), Offset(x(i), y(vals[i])))
+            }
+        }
+        val caption = sel?.let { i ->
+            val (round, g) = gap[i]
+            val v = if (leader) -g else g
+            "After R$round: " + when {
+                v > 0 && leader -> "${Fmt.points(v)} ahead of $rivalName"
+                v > 0 -> "${Fmt.points(v)} behind $rivalName"
+                v < 0 && leader -> "${Fmt.points(-v)} behind $rivalName"
+                v < 0 -> "${Fmt.points(-v)} ahead of $rivalName"
+                else -> "level with $rivalName"
+            }
         }
         Row(Modifier.fillMaxWidth()) {
             Text("R${gap.first().first}", style = inter(9.sp, color = C.TextMuted))
             Spacer(Modifier.weight(1f))
-            Text(if (leader) "above the line: ahead" else "above the line: behind", style = inter(9.sp, color = C.TextMuted))
+            Text(caption ?: "Tap the chart for any round", style = inter(10.sp, if (caption != null) FontWeight.SemiBold else FontWeight.Normal, if (caption != null) C.Text else C.TextMuted))
             Spacer(Modifier.weight(1f))
             Text("R${gap.last().first}", style = inter(9.sp, color = C.TextMuted))
         }
     }
 }
 
-/** One block per round: team colour when this driver finished ahead, grey-ish when the teammate did. */
+/** One block per round: [color] when the first driver finished ahead, [other] when the second did. */
 @Composable
-private fun DuelStrip(duels: List<app.f1pro.data.RoundDuel>, color: Color, me: String, mate: String) {
+private fun DuelStrip(duels: List<app.f1pro.data.RoundDuel>, color: Color, otherColor: Color, me: String, mate: String) {
     if (duels.isEmpty()) return
-    val other = lerp(color, if (C.dark) Color.White else Color.Black, 0.45f).copy(alpha = 0.55f)
+    val other = otherColor.copy(alpha = 0.75f)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth().height(18.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             for (dl in duels) {
@@ -428,30 +599,6 @@ private fun RoundRow(state: AppState, year: Int, r: DriverRound, color: Color) {
 }
 
 @Composable
-private fun CareerBox(c: DriverCareer) {
-    val age = c.dateOfBirth?.let { java.time.Period.between(it, java.time.LocalDate.now()).years }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("AGE", age?.toString() ?: "–")
-            StatTile("SEASONS", c.seasons.size.toString())
-            StatTile("STARTS", c.starts.toString())
-            StatTile("TITLES", c.titles.size.toString())
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("WINS", c.wins.toString())
-            StatTile("PODIUMS", c.podiums.toString())
-            StatTile("POLES", c.poles.toString())
-        }
-        val lines = listOfNotNull(
-            c.firstRace?.let { "Debut: $it" },
-            c.titles.takeIf { it.isNotEmpty() }?.let { "Champion: " + it.joinToString(", ") },
-        )
-        if (lines.isNotEmpty()) Text(lines.joinToString(" · "), style = inter(12.sp, color = C.TextSecondary))
-        Text("Career figures from Jolpica (the Ergast archive)", style = inter(10.sp, color = C.TextMuted))
-    }
-}
-
-@Composable
 private fun ColumnScope.TeamPanel(state: AppState, st: Standings, t: TeamStanding) {
     val context = LocalContext.current
     val color = Color(Teams.color(t.teamId))
@@ -516,8 +663,170 @@ private fun ColumnScope.TeamPanel(state: AppState, st: Standings, t: TeamStandin
 }
 
 @Composable
+private fun CareerBox(c: DriverCareer) {
+    val age = c.dateOfBirth?.let { java.time.Period.between(it, java.time.LocalDate.now()).years }
+    fun n(v: Int?) = v?.toString() ?: "–"
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("AGE", n(age))
+            StatTile("SEASONS", if (c.seasons.isEmpty()) "–" else c.seasons.size.toString())
+            StatTile("STARTS", c.starts?.let { v -> counted(v.toDouble()) { it.roundToInt().toString() } } ?: "–")
+            StatTile("TITLES", c.titles?.size?.toString() ?: "–")
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("WINS", c.wins?.let { v -> counted(v.toDouble()) { it.roundToInt().toString() } } ?: "–")
+            StatTile("PODIUMS", c.podiums?.let { v -> counted(v.toDouble()) { it.roundToInt().toString() } } ?: "–")
+            StatTile("POLES", c.poles?.let { v -> counted(v.toDouble()) { it.roundToInt().toString() } } ?: "–")
+        }
+        val starts = c.starts
+        val wins = c.wins
+        val lines = listOfNotNull(
+            c.firstRace?.let { "Debut: $it" },
+            c.seasons.takeIf { it.isNotEmpty() }?.let { "Seasons: ${it.first()}–${it.last()}" },
+            c.titles?.takeIf { it.isNotEmpty() }?.let { "Champion: " + it.joinToString(", ") },
+            if (starts != null && wins != null && starts > 0) "Win rate: " + String.format(java.util.Locale.US, "%.0f%%", wins * 100.0 / starts) else null,
+        )
+        for (l in lines) Text(l, style = inter(12.sp, color = C.TextSecondary))
+        Text("Career figures from Jolpica (the Ergast archive)", style = inter(10.sp, color = C.TextMuted))
+    }
+}
+
+/**
+ * Any two drivers side by side: pick the second from the list, then both form lines on one
+ * chart, the numbers row by row (the better one highlighted), the head-to-head, and who
+ * finished ahead round by round.
+ */
+@Composable
+private fun ComparePanel(state: AppState, st: Standings, a: DriverStanding) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val b = state.compare?.second
+    var picking by remember { mutableStateOf(b == null) }
+    val ca = Color(Teams.color(a.teamId))
+    val cbBase = b?.let { Color(Teams.color(it.teamId)) } ?: C.TextMuted
+    val cb = if (b != null && b.teamId == a.teamId) shade(cbBase) else cbBase
+    LaunchedEffect(a) { state.loadDriverSeason(st.season, a) }
+    val sa = state.driverSeasons[state.driverKey(st.season, a)]
+    val sb = b?.let { state.driverSeasons[state.driverKey(st.season, it)] }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("COMPARE", style = SectionLabel)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            NameBlock(a, ca, Modifier.weight(1f), Alignment.Start)
+            Text("VS", style = orbitron(14.sp, FontWeight.Black, C.TextMuted), modifier = Modifier.padding(horizontal = 10.dp))
+            Box(Modifier.weight(1f)) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(C.SurfaceLight)
+                        .tap { picking = true }
+                        .padding(10.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    if (b != null) {
+                        Text(b.name, style = inter(12.sp, color = C.TextSecondary), maxLines = 1)
+                        Text(b.surname.uppercase(), style = orbitron(15.sp, FontWeight.Bold, readable(cb, C.SurfaceLight)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Change ▾", style = inter(10.sp, color = C.TextMuted))
+                    } else {
+                        Text("Pick a driver ▾", style = inter(14.sp, FontWeight.SemiBold, C.AccentText))
+                    }
+                }
+                DropdownMenu(
+                    expanded = picking,
+                    onDismissRequest = { picking = false },
+                    containerColor = C.Surface,
+                    modifier = Modifier.heightIn(max = 420.dp),
+                ) {
+                    for (x in st.drivers) {
+                        if (x.name == a.name && x.surname == a.surname) continue
+                        DropdownMenuItem(
+                            leadingIcon = { Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Color(Teams.color(x.teamId)))) },
+                            text = {
+                                Column {
+                                    Text("${x.name} ${x.surname}", style = inter(14.sp, FontWeight.Medium, C.Text))
+                                    Text(Teams.shortName(x.teamName) + " · P${x.position}", style = inter(11.sp, color = C.TextMuted))
+                                }
+                            },
+                            onClick = {
+                                Haptics.segment(view)
+                                state.compare = a to x
+                                state.loadDriverSeason(st.season, x)
+                                picking = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (b != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CompareRow("Position", "P${a.position}", "P${b.position}", a.position < b.position, b.position < a.position, ca, cb)
+                CompareRow("Points", Fmt.points(a.points), Fmt.points(b.points), a.points > b.points, b.points > a.points, ca, cb)
+                CompareRow("Wins", a.wins.toString(), b.wins.toString(), a.wins > b.wins, b.wins > a.wins, ca, cb)
+                if (sa != null && sb != null) {
+                    CompareRow("Podiums", sa.podiums.toString(), sb.podiums.toString(), sa.podiums > sb.podiums, sb.podiums > sa.podiums, ca, cb)
+                    CompareRow("Poles", sa.poles.toString(), sb.poles.toString(), sa.poles > sb.poles, sb.poles > sa.poles, ca, cb)
+                    val ba = sa.bestFinish; val bb = sb.bestFinish
+                    CompareRow("Best finish", ba?.let { "P$it" } ?: "–", bb?.let { "P$it" } ?: "–", (ba ?: 99) < (bb ?: 99), (bb ?: 99) < (ba ?: 99), ca, cb)
+                    val qa = sa.avgQuali; val qb = sb.avgQuali
+                    CompareRow(
+                        "Avg grid", qa?.let { String.format(java.util.Locale.US, "P%.1f", it) } ?: "–", qb?.let { String.format(java.util.Locale.US, "P%.1f", it) } ?: "–",
+                        qa != null && qb != null && qa < qb, qa != null && qb != null && qb < qa, ca, cb,
+                    )
+                    CompareRow("DNFs", sa.dnfs.toString(), sb.dnfs.toString(), sa.dnfs < sb.dnfs, sb.dnfs < sa.dnfs, ca, cb)
+                }
+            }
+            if (sa != null && sb != null) {
+                PanelLabel("FORM · ${st.season}")
+                FormChart(listOf(sa to ca, sb to cb), listOf(a.surname, b.surname))
+                PanelLabel("HEAD TO HEAD")
+                HeadToHeadBlock(a, b, sa, sb, ca, cb)
+                DuelStrip(DriverStats.duels(sa, sb), ca, cb, a.surname, b.surname)
+            } else {
+                Skeleton(150.dp)
+            }
+        } else {
+            Text("Pick someone to compare ${a.surname} with.", style = inter(13.sp, color = C.TextMuted))
+        }
+    }
+}
+
+@Composable
+private fun NameBlock(d: DriverStanding, color: Color, modifier: Modifier, align: Alignment.Horizontal) {
+    Column(
+        modifier.clip(RoundedCornerShape(12.dp)).background(C.SurfaceLight).padding(10.dp),
+        horizontalAlignment = align,
+    ) {
+        Text(d.name, style = inter(12.sp, color = C.TextSecondary), maxLines = 1)
+        Text(d.surname.uppercase(), style = orbitron(15.sp, FontWeight.Bold, readable(color, C.SurfaceLight)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(Teams.shortName(d.teamName), style = inter(10.sp, color = C.TextMuted), maxLines = 1)
+    }
+}
+
+/** "Points   212  |  187": the better value in its driver's colour. */
+@Composable
+private fun CompareRow(label: String, a: String, b: String, aBetter: Boolean, bBetter: Boolean, ca: Color, cb: Color) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.SurfaceLight.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(a, style = orbitron(13.sp, FontWeight.Bold, if (aBetter) readable(ca, C.SurfaceLight) else C.Text), modifier = Modifier.weight(1f))
+        Text(label, style = inter(11.sp, color = C.TextMuted))
+        Text(b, style = orbitron(13.sp, FontWeight.Bold, if (bBetter) readable(cb, C.SurfaceLight) else C.Text), modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    }
+}
+
+@Composable
 private fun PanelLabel(text: String) {
-    Text(text, style = SectionLabel, modifier = Modifier.padding(bottom = 0.dp))
+    Text(text, style = SectionLabel)
 }
 
 @Composable
@@ -538,8 +847,8 @@ private fun RowScope.StatTile(label: String, value: String) {
 
 /** Points, races and qualifying, each as a split bar: left is [a], right is [b]. */
 @Composable
-private fun HeadToHeadBlock(a: DriverStanding, b: DriverStanding, sa: DriverSeason?, sb: DriverSeason?, color: Color) {
-    val other = lerp(color, if (C.dark) Color.White else Color.Black, 0.45f)
+private fun HeadToHeadBlock(a: DriverStanding, b: DriverStanding, sa: DriverSeason?, sb: DriverSeason?, color: Color, otherColor: Color? = null) {
+    val other = otherColor ?: shade(color)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row {
             Text(a.surname, style = inter(13.sp, FontWeight.SemiBold, readable(color, C.Surface)), modifier = Modifier.weight(1f))
@@ -554,8 +863,13 @@ private fun HeadToHeadBlock(a: DriverStanding, b: DriverStanding, sa: DriverSeas
     }
 }
 
+/** A split bar that grows out from the middle when it first shows. */
 @Composable
 private fun SplitBar(label: String, a: Double, b: Double, aText: String, bText: String, ca: Color, cb: Color) {
+    val total = a + b
+    val target = if (total <= 0) 0.5f else (a / total).toFloat().coerceIn(0.02f, 0.98f)
+    val f = remember { Animatable(0.5f) }
+    LaunchedEffect(target) { f.animateTo(target, tween(750, easing = FastOutSlowInEasing)) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(aText, style = orbitron(13.sp, FontWeight.Bold, C.Text))
@@ -564,66 +878,96 @@ private fun SplitBar(label: String, a: Double, b: Double, aText: String, bText: 
             Spacer(Modifier.weight(1f))
             Text(bText, style = orbitron(13.sp, FontWeight.Bold, C.Text))
         }
-        val total = a + b
-        val f = if (total <= 0) 0.5f else (a / total).toFloat().coerceIn(0.02f, 0.98f)
+        val v = f.value.coerceIn(0.02f, 0.98f)
         Row(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))) {
-            Box(Modifier.weight(f).fillMaxHeight().background(ca))
+            Box(Modifier.weight(v).fillMaxHeight().background(ca))
             Spacer(Modifier.width(2.dp))
-            Box(Modifier.weight(1f - f).fillMaxHeight().background(cb))
+            Box(Modifier.weight(1f - v).fillMaxHeight().background(cb))
         }
     }
 }
 
 /**
- * Finishing position at each round (P1 at the top). Podiums get a bigger dot, retirements a
- * red cross along the bottom. One line per driver.
+ * Finishing position at each round (P1 at the top), one line per driver, drawn in from the
+ * left when it first shows. Podiums get a bigger dot, retirements a red cross along the
+ * bottom. Tap the chart to read a round.
  */
 @Composable
-private fun FormChart(lines: List<Pair<DriverSeason, Color>>) {
+private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String> = emptyList()) {
     val all = lines.flatMap { it.first.rounds }
     if (all.isEmpty()) return
     val minR = all.minOf { it.round }
     val maxR = all.maxOf { it.round }
+    val rounds = all.map { it.round }.distinct().sorted()
     val worst = maxOf(20, all.maxOf { it.finish ?: 0 })
     val grid = C.GlassBorder
     val dnf = C.Live
     val ring = C.Surface
+    val guide = C.TextMuted
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
+    var sel by remember(lines.map { it.first.driverId }) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (names.size > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                lines.forEachIndexed { i, (_, c) ->
+                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(50)).background(c))
+                    Text(" " + names.getOrElse(i) { "" } + "   ", style = inter(11.sp, color = C.TextSecondary))
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth().height(150.dp)) {
             Column(Modifier.fillMaxHeight().width(28.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 for (l in listOf("P1", "P${(worst + 1) / 2}", "P$worst")) Text(l, style = inter(9.sp, color = C.TextMuted))
             }
-            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+            Canvas(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(rounds) {
+                        detectTapGestures { p ->
+                            val pad = 6.dp.toPx()
+                            val w = size.width - pad * 2
+                            val r = if (maxR == minR) minR else (minR + ((p.x - pad) / w).coerceIn(0f, 1f) * (maxR - minR)).roundToInt()
+                            val pick = rounds.minByOrNull { abs(it - r) }
+                            sel = if (sel == pick) null else pick
+                        }
+                    }
+            ) {
                 val pad = 6.dp.toPx()
                 val w = size.width - pad * 2
                 val h = size.height - pad * 2
                 fun x(round: Int) = pad + if (maxR == minR) w / 2 else (round - minR).toFloat() / (maxR - minR) * w
                 fun y(pos: Int) = pad + (pos - 1).toFloat() / (worst - 1) * h
                 for (p in listOf(1, (worst + 1) / 2, worst)) drawLine(grid, Offset(pad, y(p)), Offset(pad + w, y(p)), 1.dp.toPx())
-                for ((season, color) in lines) {
-                    // Line through finishes; a retirement breaks it.
-                    var path = Path()
-                    var started = false
-                    for (r in season.rounds) {
-                        val f = r.finish
-                        if (f == null) {
-                            if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                            path = Path(); started = false
-                            continue
+                sel?.let { drawLine(guide.copy(alpha = 0.5f), Offset(x(it), pad), Offset(x(it), pad + h), 1.dp.toPx()) }
+                clipRect(right = pad + w * progress.value + 8.dp.toPx()) {
+                    for ((season, color) in lines) {
+                        // Line through finishes; a retirement breaks it.
+                        var path = Path()
+                        var started = false
+                        for (r in season.rounds) {
+                            val f = r.finish
+                            if (f == null) {
+                                if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                                path = Path(); started = false
+                                continue
+                            }
+                            if (!started) { path.moveTo(x(r.round), y(f)); started = true } else path.lineTo(x(r.round), y(f))
                         }
-                        if (!started) { path.moveTo(x(r.round), y(f)); started = true } else path.lineTo(x(r.round), y(f))
-                    }
-                    if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                    for (r in season.rounds) {
-                        val f = r.finish
-                        if (f == null) {
-                            val cx = x(r.round); val cy = y(worst); val k = 3.5.dp.toPx()
-                            drawLine(dnf, Offset(cx - k, cy - k), Offset(cx + k, cy + k), 2.dp.toPx())
-                            drawLine(dnf, Offset(cx - k, cy + k), Offset(cx + k, cy - k), 2.dp.toPx())
-                        } else {
-                            val big = f <= 3
-                            drawCircle(ring, (if (big) 5.5.dp else 3.5.dp).toPx(), Offset(x(r.round), y(f)))
-                            drawCircle(color, (if (big) 4.5.dp else 2.5.dp).toPx(), Offset(x(r.round), y(f)))
+                        if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        for (r in season.rounds) {
+                            val f = r.finish
+                            val picked = r.round == sel
+                            if (f == null) {
+                                val cx = x(r.round); val cy = y(worst); val k = (if (picked) 5.dp else 3.5.dp).toPx()
+                                drawLine(dnf, Offset(cx - k, cy - k), Offset(cx + k, cy + k), 2.dp.toPx())
+                                drawLine(dnf, Offset(cx - k, cy + k), Offset(cx + k, cy - k), 2.dp.toPx())
+                            } else {
+                                val big = f <= 3 || picked
+                                drawCircle(ring, (if (picked) 7.dp else if (big) 5.5.dp else 3.5.dp).toPx(), Offset(x(r.round), y(f)))
+                                drawCircle(color, (if (picked) 5.5.dp else if (big) 4.5.dp else 2.5.dp).toPx(), Offset(x(r.round), y(f)))
+                            }
                         }
                     }
                 }
@@ -633,6 +977,29 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>) {
             Text("R$minR", style = inter(9.sp, color = C.TextMuted))
             Spacer(Modifier.weight(1f))
             Text("R$maxR", style = inter(9.sp, color = C.TextMuted))
+        }
+        // What the tapped round was, per driver.
+        val pick = sel
+        if (pick == null) {
+            Text("Tap the chart for any round", style = inter(10.sp, color = C.TextMuted))
+        } else {
+            val raceName = lines.firstNotNullOfOrNull { (s, _) -> s.rounds.firstOrNull { it.round == pick }?.raceName }?.replace("Grand Prix", "GP")
+            Text("R$pick" + (raceName?.let { " · $it" } ?: ""), style = inter(12.sp, FontWeight.SemiBold, C.Text))
+            lines.forEachIndexed { i, (s, c) ->
+                val r = s.rounds.firstOrNull { it.round == pick }
+                val who = names.getOrNull(i)?.takeIf { lines.size > 1 }?.let { "$it: " } ?: ""
+                val text = when {
+                    r == null -> "${who}didn't race"
+                    r.finish == null -> who + (r.grid?.takeIf { it > 0 }?.let { "from P$it · " } ?: "") + r.status
+                    else -> who + "P${r.finish}" + (r.grid?.takeIf { it > 0 }?.let { " from P$it" } ?: "") +
+                        (r.gained?.takeIf { it != 0 }?.let { g -> if (g > 0) " (+$g)" else " (−${-g})" } ?: "") +
+                        " · ${Fmt.points(r.allPoints)} pts" + (if (r.fastestRank == 1) " · fastest lap" else "")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(c))
+                    Text("  $text", style = inter(12.sp, color = if (r?.finish == null) C.Live else C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }

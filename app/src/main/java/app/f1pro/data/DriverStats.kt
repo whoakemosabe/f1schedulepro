@@ -70,12 +70,24 @@ data class DriverCareer(
     val dateOfBirth: java.time.LocalDate?,
     val seasons: List<Int>,
     val firstRace: String?,
-    val starts: Int,
-    val wins: Int,
-    val podiums: Int,
-    val poles: Int,
-    val titles: List<Int>,
+    val starts: Int?,
+    val wins: Int?,
+    val podiums: Int?,
+    val poles: Int?,
+    val titles: List<Int>?,
 )
+
+/** One race at one circuit for one driver (track history on the This weekend card). */
+data class TrackResult(val season: Int, val finish: Int?, val positionText: String, val grid: Int?)
+
+/** A driver's record at a circuit. */
+data class TrackRecord(val results: List<TrackResult>) {
+    val starts: Int get() = results.size
+    val wins: Int get() = results.count { it.finish == 1 }
+    val podiums: Int get() = results.count { (it.finish ?: 99) <= 3 }
+    val best: Int? get() = results.mapNotNull { it.finish }.minOrNull()
+    fun lastBefore(season: Int): TrackResult? = results.filter { it.season < season }.maxByOrNull { it.season }
+}
 
 object DriverStats {
     data class Entry(val id: String, val given: String, val family: String)
@@ -192,6 +204,10 @@ object DriverStats {
         val entries = LinkedHashMap<String, Entry>()
         val codes = HashMap<String, String>()
         val numbers = HashMap<String, String>()
+        val raceNames = HashMap<Int, String>()
+        for (page in sprintPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) rs.getJSONObject(i).let { r -> r.optString("round").toIntOrNull()?.let { raceNames[it] = r.optString("raceName") } }
+        }
         for (page in resultsPages) races(page)?.let { rs ->
             for (i in 0 until rs.length()) {
                 val r = rs.getJSONObject(i)
@@ -220,6 +236,17 @@ object DriverStats {
                     )
                 }
             }
+        }
+        // A sprint but no race start (e.g. a DNS on Sunday): still a round worth showing.
+        for ((key, sp) in sprint) {
+            val (id, round) = key
+            val m = rounds[id] ?: continue
+            if (m.containsKey(round)) continue
+            m[round] = DriverRound(
+                round = round, raceName = raceNames[round] ?: "Round $round", finish = null, order = 99,
+                status = "Did not start", points = 0.0, quali = quali[id to round],
+                sprintFinish = sp.first, sprintPoints = sp.second,
+            )
         }
         val drivers = rounds.mapValues { (id, m) -> DriverSeason(season, id, codes[id], numbers[id], m.values.sortedBy { it.round }) }
         return SeasonStats(season, entries.values.toList(), drivers, fetchedAt)
@@ -290,6 +317,31 @@ object DriverStats {
         val arr = JSONObject(standingsJson).optJSONObject("MRData")?.optJSONObject("StandingsTable")?.optJSONArray("StandingsLists") ?: return emptyList()
         return (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optString("season")?.toIntOrNull() }.sorted()
     }
+
+    /** The champion's driver id from /{season}/driverStandings/1 (Jolpica needs the season). */
+    fun champion(standingsJson: String): String? =
+        JSONObject(standingsJson).optJSONObject("MRData")?.optJSONObject("StandingsTable")?.optJSONArray("StandingsLists")
+            ?.optJSONObject(0)?.optJSONArray("DriverStandings")?.optJSONObject(0)?.optJSONObject("Driver")
+            ?.optString("driverId")?.takeIf { it.isNotBlank() }
+
+    /** /circuits/{id}/drivers/{driver}/results: every race this driver has had at the track. */
+    fun trackRecord(json: String): TrackRecord {
+        val rs = races(json) ?: return TrackRecord(emptyList())
+        val out = (0 until rs.length()).mapNotNull { i ->
+            val r = rs.getJSONObject(i)
+            val res = r.optJSONArray("Results")?.optJSONObject(0) ?: return@mapNotNull null
+            val season = r.optString("season").toIntOrNull() ?: return@mapNotNull null
+            val text = res.optString("positionText")
+            TrackResult(season, text.toIntOrNull(), text, res.optString("grid").toIntOrNull())
+        }
+        return TrackRecord(out.sortedBy { it.season })
+    }
+
+    /**
+     * Most points still available this season (25 a race, 8 a sprint; no fastest-lap point
+     * since 2025), for "can they still win it".
+     */
+    fun pointsLeft(racesLeft: Int, sprintsLeft: Int): Int = racesLeft * 25 + sprintsLeft * 8
 
     // ── Headshots (OpenF1) ──
 

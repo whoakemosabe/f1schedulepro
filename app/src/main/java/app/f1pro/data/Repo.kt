@@ -345,30 +345,16 @@ class Repo(context: Context) {
 
     /**
      * Career totals for a Jolpica driver id: a handful of small queries, one after another
-     * (Jolpica asks for no more than a few a second; [Net] paces them). Cached for 3 days.
+     * ([Net] paces them). Each figure is independent: one that fails is left out rather than
+     * losing the lot. Cached for 3 days. Titles come from [champions].
      */
-    suspend fun driverCareer(id: String, currentSeason: Int): DriverCareer? = withContext(Dispatchers.IO) {
-        val f = File(dir, "career-$id.json")
-        fun parse(o: JSONObject): DriverCareer {
-            val titles = DriverStats.titleSeasons(o.getString("titles")).filter { it < currentSeason }
-            return DriverCareer(
-                dateOfBirth = DriverStats.dateOfBirth(o.getString("driver")),
-                seasons = DriverStats.seasons(o.getString("seasons")),
-                firstRace = DriverStats.firstRace(o.getString("starts")),
-                starts = DriverStats.total(o.getString("starts")),
-                wins = DriverStats.total(o.getString("p1")),
-                podiums = DriverStats.total(o.getString("p1")) + DriverStats.total(o.getString("p2")) + DriverStats.total(o.getString("p3")),
-                poles = DriverStats.total(o.getString("poles")),
-                titles = titles,
-            )
-        }
+    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean): DriverCareer? = withContext(Dispatchers.IO) {
+        val f = File(dir, "career2-$id.json")
         val cached = try { JSONObject(f.readText()) } catch (e: Exception) { null }
-        if (cached != null && System.currentTimeMillis() - f.lastModified() < 3 * 24 * HOUR_MS) {
-            try { return@withContext parse(cached) } catch (e: Exception) { }
-        }
-        try {
+        val fresh = cached != null && System.currentTimeMillis() - f.lastModified() < 3 * 24 * HOUR_MS
+        val o = if (fresh) cached!! else JSONObject()
+        if (!fresh) {
             val base = "$JOLPICA/drivers/$id"
-            val o = JSONObject()
             for ((k, url) in listOf(
                 "driver" to "$base.json",
                 "seasons" to "$base/seasons.json?limit=100",
@@ -377,14 +363,63 @@ class Repo(context: Context) {
                 "p2" to "$base/results/2.json?limit=1",
                 "p3" to "$base/results/3.json?limit=1",
                 "poles" to "$base/qualifying/1.json?limit=1",
-                "titles" to "$base/driverStandings/1.json?limit=100",
             )) {
-                o.put(k, Net.get(url, "application/json"))
+                try { o.put(k, Net.get(url, "application/json")) } catch (e: Exception) { cached?.optString(k)?.takeIf { it.isNotBlank() }?.let { o.put(k, it) } }
             }
-            f.writeText(o.toString())
-            parse(o)
+            if (o.length() > 0) try { f.writeText(o.toString()) } catch (e: Exception) { }
+        }
+        if (o.length() == 0) return@withContext null
+        fun total(k: String) = o.optString(k).takeIf { it.isNotBlank() }?.let { try { DriverStats.total(it) } catch (e: Exception) { null } }
+        val seasons = o.optString("seasons").takeIf { it.isNotBlank() }?.let { try { DriverStats.seasons(it) } catch (e: Exception) { null } }.orEmpty()
+        val podiums = listOf(total("p1"), total("p2"), total("p3")).takeIf { l -> l.all { it != null } }?.sumOf { it!! }
+        val champs = champions(seasons.filter { it < currentSeason || (it == currentSeason && seasonOver) })
+        DriverCareer(
+            dateOfBirth = o.optString("driver").takeIf { it.isNotBlank() }?.let { DriverStats.dateOfBirth(it) },
+            seasons = seasons,
+            firstRace = o.optString("starts").takeIf { it.isNotBlank() }?.let { try { DriverStats.firstRace(it) } catch (e: Exception) { null } },
+            starts = total("starts"),
+            wins = total("p1"),
+            podiums = podiums,
+            poles = total("poles"),
+            titles = champs?.let { m -> m.filterValues { it == id }.keys.sorted() },
+        )
+    }
+
+    /**
+     * Season → champion's driver id, for finished seasons. Kept on the phone for good (a past
+     * champion never changes), so each season is asked about once, whoever's panel asks.
+     * Null if any season couldn't be looked up.
+     */
+    private fun champions(seasons: List<Int>): Map<Int, String>? {
+        val f = File(dir, "champions.json")
+        val known = try { JSONObject(f.readText()) } catch (e: Exception) { JSONObject() }
+        var ok = true
+        var changed = false
+        for (y in seasons) {
+            if (known.has(y.toString())) continue
+            try {
+                DriverStats.champion(Net.get("$JOLPICA/$y/driverStandings/1.json", "application/json"))?.let {
+                    known.put(y.toString(), it); changed = true
+                } ?: run { ok = false }
+            } catch (e: Exception) { ok = false }
+        }
+        if (changed) try { f.writeText(known.toString()) } catch (e: Exception) { }
+        if (!ok) return null
+        return seasons.associateWith { known.optString(it.toString()) }
+    }
+
+    /** This driver's record at a circuit, cached for a day. */
+    suspend fun trackRecord(circuitId: String, driverId: String): TrackRecord? = withContext(Dispatchers.IO) {
+        val f = File(dir, "track-$circuitId-$driverId.json")
+        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * HOUR_MS) {
+            try { return@withContext DriverStats.trackRecord(f.readText()) } catch (e: Exception) { }
+        }
+        try {
+            val raw = Net.get("$JOLPICA/circuits/$circuitId/drivers/$driverId/results.json?limit=100", "application/json")
+            f.writeText(raw)
+            DriverStats.trackRecord(raw)
         } catch (e: Exception) {
-            try { cached?.let { parse(it) } } catch (e2: Exception) { null }
+            try { DriverStats.trackRecord(f.readText()) } catch (e2: Exception) { null }
         }
     }
 

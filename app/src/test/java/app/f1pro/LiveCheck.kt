@@ -93,6 +93,11 @@ class LiveCheck {
                 val wins = app.f1pro.data.DriverStats.total(Net.get("$base/results/1.json?limit=1"))
                 val starts = Net.get("$base/results.json?limit=1")
                 line(wins > 0, "Driver career: ${app.f1pro.data.DriverStats.total(starts)} starts, $wins wins, first ${app.f1pro.data.DriverStats.firstRace(starts)}")
+                val poles = app.f1pro.data.DriverStats.total(Net.get("$base/qualifying/1.json?limit=1"))
+                val champ = app.f1pro.data.DriverStats.champion(Net.get("${Repo.JOLPICA}/${year - 1}/driverStandings/1.json"))
+                line(champ != null, "Career extras: $poles poles; ${year - 1} champion $champ")
+                val track = app.f1pro.data.DriverStats.trackRecord(Net.get("${Repo.JOLPICA}/circuits/americas/drivers/max_verstappen/results.json?limit=100"))
+                line(track.starts >= 5, "Track record (Verstappen at COTA): ${track.starts} starts, ${track.wins} wins, best P${track.best}")
                 val heads = app.f1pro.data.DriverStats.headshots(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
                 line(heads.size >= 15, "Headshots (OpenF1): ${heads.size} drivers")
             }
