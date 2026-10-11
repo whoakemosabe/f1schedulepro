@@ -44,7 +44,7 @@ Unit tests cover the parsers, the calendar and the reminder timing (`./gradlew t
 
 ## History
 
-This started as a PWA (React + Vite, with a small web-push server). The last version of that is tagged [`pwa-final`](../../tree/pwa-final).
+This started as a PWA (React + Vite, with a small web-push server). Its last version is kept on the [`pwa-final`](../../tree/pwa-final) branch.
 
 ## Credits
 
