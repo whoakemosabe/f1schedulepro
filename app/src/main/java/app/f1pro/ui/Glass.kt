@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
@@ -48,6 +49,16 @@ val LocalPageBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 /** Space the floating header (top) and tab bar (bottom) take, for pages to pad their content. */
 val LocalChrome = staticCompositionLocalOf { androidx.compose.foundation.layout.PaddingValues(0.dp) }
+
+/**
+ * Makes a floating bar solid to touch: taps and drags on it stop here instead of reaching the
+ * page underneath. Buttons inside it still work, since they sit inside this node.
+ */
+fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent().changes.forEach { if (!it.isConsumed) it.consume() }
+    }
+}
 
 /** Glass rim: a crisp 1 dp edge, light on dark and dark on light. */
 val Rim: Color get() = if (C.dark) Color(0x2EFFFFFF) else Color(0x240C0F1A)

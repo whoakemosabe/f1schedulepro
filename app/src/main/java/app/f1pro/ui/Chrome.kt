@@ -162,7 +162,7 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
     val tabs = Tab.entries
     val view = androidx.compose.ui.platform.LocalView.current
     val backdrop = LocalPageBackdrop.current
-    Box(modifier.fillMaxWidth()) {
+    Box(modifier.fillMaxWidth().blockTouches()) {
         // Frosted across the full width; the page scrolls underneath.
         if (backdrop != null) GlassBar(backdrop, Modifier.matchParentSize())
         else Box(Modifier.matchParentSize().background(C.Bar))

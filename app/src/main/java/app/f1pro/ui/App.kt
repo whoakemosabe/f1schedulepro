@@ -84,6 +84,7 @@ fun F1App(state: AppState) {
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .onSizeChanged { topPx = it.height }
+                        .blockTouches()
                 ) {
                     Box(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) { Header(state) }
                     UpdateBanner()
