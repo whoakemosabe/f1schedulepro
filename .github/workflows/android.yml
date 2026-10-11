@@ -47,16 +47,9 @@ jobs:
           echo "KEYSTORE_FILE=$RUNNER_TEMP/f1pro-release.p12" >> "$GITHUB_ENV"
           echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Unit tests
-        shell: bash
-        run: |
-          chmod +x gradlew
-          set -o pipefail
-          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee build.log
-
       - name: Refresh the bundled calendar
         # Fresh installs start with the real calendar even offline. Keeps the committed copy if
-        # the feed is down or a season isn't published yet.
+        # the feed is down or a season isn't published yet. Tests use a fixed copy in src/test.
         continue-on-error: true
         shell: bash
         run: |
@@ -71,11 +64,13 @@ jobs:
             fi
           done
 
-      - name: Build APK
+      - name: Test and build
+        # One Gradle run (kept warm for the live check below) instead of three cold ones.
         shell: bash
         run: |
+          chmod +x gradlew
           set -o pipefail
-          ./gradlew --no-daemon assembleRelease 2>&1 | tee -a build.log
+          ./gradlew testDebugUnitTest assembleRelease 2>&1 | tee build.log
 
       # GitHub keeps 10 error annotations per step, so compile errors are reported in batches.
       - name: Report errors (1-10)
@@ -104,10 +99,12 @@ jobs:
         run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
 
       - name: Live feed check
+        # Releases only; branch builds are just compile-and-test checks.
+        if: github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
           LIVE_CHECK: "1"
-        run: ./gradlew --no-daemon testDebugUnitTest --tests app.f1pro.LiveCheck --rerun
+        run: ./gradlew testDebugUnitTest --tests app.f1pro.LiveCheck --rerun
 
       - name: Keep the APK with the run
         uses: actions/upload-artifact@v4

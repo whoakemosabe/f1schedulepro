@@ -19,7 +19,8 @@ class CalendarTest {
 
     private fun season(): SeasonCalendar {
         val extras = Parsers.extras(asset("extras-2026.json"))
-        return Parsers.calendar(asset("calendar-2026.json"), extras, live = false)!!
+        // A fixed copy: CI refreshes the bundled calendar from the live feed before building.
+        return Parsers.calendar(File("src/test/resources/calendar-2026-fixture.json").readText(), extras, live = false)!!
     }
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()

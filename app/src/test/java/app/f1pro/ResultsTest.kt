@@ -122,7 +122,7 @@ class ResultsTest {
     }
 
     private val season = Parsers.calendar(
-        File("src/main/assets/calendar-2026.json").readText(),
+        File("src/test/resources/calendar-2026-fixture.json").readText(),
         Parsers.extras(File("src/main/assets/extras-2026.json").readText()),
         live = false,
     )!!
