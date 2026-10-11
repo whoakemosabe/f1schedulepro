@@ -130,7 +130,6 @@ jobs:
             fi
             echo "F1 Schedule Pro 2.0 — the native Android app. Built from ${GITHUB_SHA}."
             echo
-            echo "### Live feed check"
             cat app/build/live-check.md 2>/dev/null || echo "_Live feed check didn't complete._"
           } > notes.md
 
