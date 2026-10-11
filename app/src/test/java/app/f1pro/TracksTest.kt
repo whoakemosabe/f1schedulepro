@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 class TracksTest {
-    private val tracks = Tracks.parse(File("src/main/assets/circuits.json").readText())
+    private val tracks = Tracks.parse(File("src/main/assets/tracks.json").readText())
 
     @Test
     fun everyCircuitOnTheCalendarHasAnOutline() {

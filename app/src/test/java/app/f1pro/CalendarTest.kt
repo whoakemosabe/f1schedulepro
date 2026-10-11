@@ -78,7 +78,11 @@ class CalendarTest {
     fun everyCircuitHasStats() {
         val circuits = Parsers.circuits(asset("circuits.json"))
         for (r in season().races.filter { !it.isTesting }) {
-            assertTrue("missing stats for ${r.circuit.id}", circuits.containsKey(r.circuit.id))
+            val c = circuits[r.circuit.id]
+            assertTrue("missing stats for ${r.circuit.id}", c != null)
+            // Real numbers, not just a key (a wrong file once had the keys but no stats).
+            assertTrue("no length for ${r.circuit.id}", c!!.lengthKm > 2.0)
+            assertTrue("no turns for ${r.circuit.id}", c.turns > 5)
         }
     }
 

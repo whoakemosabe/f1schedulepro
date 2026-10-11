@@ -33,7 +33,7 @@ object TrackStore {
 
     fun get(context: Context, circuitId: String): TrackShape? {
         val m = all ?: try {
-            Tracks.parse(context.assets.open("circuits.json").bufferedReader().use { it.readText() })
+            Tracks.parse(context.assets.open("tracks.json").bufferedReader().use { it.readText() })
         } catch (e: Exception) {
             emptyMap()
         }.also { all = it }

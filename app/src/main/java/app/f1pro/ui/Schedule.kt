@@ -392,7 +392,8 @@ private fun RaceDetailPager(
             Modifier
                 .fillMaxWidth()
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding(), bottom = 12.dp)
-                .height(SectionRowHeight),
+                .height(SectionRowHeight)
+                .enterStagger(0),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -594,12 +595,14 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
             }
         }
 
-        if (!race.isTesting && status != RaceStatus.UPCOMING) ResultsCard(state, race, now)
-        if (forecast != null) WeatherCard(state, race, forecast)
-        if (!race.isTesting) TrackCard(race.circuit.id, race.circuit.name)
+        // Below the hero, the cards arrive one by one as the race card opens into the page.
+        var order = 1
+        if (!race.isTesting && status != RaceStatus.UPCOMING) Box(Modifier.enterStagger(order++)) { ResultsCard(state, race, now) }
+        if (forecast != null) Box(Modifier.enterStagger(order++)) { WeatherCard(state, race, forecast) }
+        if (!race.isTesting) Box(Modifier.enterStagger(order++)) { TrackCard(race.circuit.id, race.circuit.name) }
 
         // Sessions
-        Column(Modifier.fillMaxWidth().glassCard(C.Highlight.copy(alpha = 0.4f))) {
+        Column(Modifier.fillMaxWidth().enterStagger(order).glassCard(C.Highlight.copy(alpha = 0.4f))) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -11,7 +11,7 @@ class TrackShape(val w: Float, val h: Float, val points: FloatArray) {
 }
 
 /**
- * Circuit outlines keyed by the calendar's circuit id, from assets/circuits.json. The outlines
+ * Circuit outlines keyed by the calendar's circuit id, from assets/tracks.json. The outlines
  * come from bacinger/f1-circuits (MIT): unofficial, traced from maps, good for a drawing.
  */
 object Tracks {
