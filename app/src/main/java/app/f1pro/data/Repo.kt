@@ -372,7 +372,7 @@ class Repo(context: Context) {
      * season and kept (past seasons never change), plus this season from [current]. A few
      * requests the first time a driver is opened in a season, none after that.
      */
-    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean, current: DriverSeason?): DriverCareer? = withContext(Dispatchers.IO) {
+    suspend fun driverCareer(id: String, currentSeason: Int, current: DriverSeason?): DriverCareer? = withContext(Dispatchers.IO) {
         val f = File(dir, "career3-$id-$currentSeason.json")
         fun pages(o: JSONObject, k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
         val saved = try { JSONObject(f.readText()) } catch (e: Exception) { null }
@@ -384,9 +384,15 @@ class Repo(context: Context) {
                 try { f.writeText(it.toString()) } catch (e: Exception) { }
             }
         }
-        val partial = DriverStats.career(pages(o, "results"), pages(o, "poles"), currentSeason, current, null)
-        val champs = champions(partial.seasons.filter { it < currentSeason || (it == currentSeason && seasonOver) })
-        partial.copy(titles = champs?.let { m -> m.filterValues { it == id }.keys.sorted() })
+        DriverStats.career(pages(o, "results"), pages(o, "poles"), currentSeason, current, null)
+    }
+
+    /**
+     * Seasons [id] won, among [seasons] (finished ones only). Uses the shared champions list,
+     * asking Jolpica only about seasons not looked up before. Null if one couldn't be.
+     */
+    suspend fun titles(id: String, seasons: List<Int>): List<Int>? = withContext(Dispatchers.IO) {
+        champions(seasons)?.let { m -> m.filterValues { it == id }.keys.sorted() }
     }
 
     /**

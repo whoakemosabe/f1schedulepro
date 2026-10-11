@@ -242,8 +242,13 @@ class AppState(context: Context, private val scope: CoroutineScope) {
                 val over = races.isNotEmpty() && races.all { (it.raceSession?.end ?: 0L) < now }
                 val current = driverSeasons.values.firstOrNull { it.driverId == driverId && it.season == season }
                 // Never a spinner forever: give up after 40 s and offer Retry.
-                val c = kotlinx.coroutines.withTimeout(40_000) { repo.driverCareer(driverId, season, over, current) }
-                if (c != null) careers[driverId] = c else careerFailed[driverId] = true
+                val c = kotlinx.coroutines.withTimeout(40_000) { repo.driverCareer(driverId, season, current) }
+                if (c == null) { careerFailed[driverId] = true; return@launch }
+                // Show the numbers now; titles follow (a first look-up of past champions can
+                // take a few seconds for a long career, and is shared by every driver after).
+                careers[driverId] = c
+                val titles = try { repo.titles(driverId, c.seasons.filter { it < season || (it == season && over) }) } catch (e: Exception) { null }
+                if (titles != null) careers[driverId] = c.copy(titles = titles)
             } catch (e: app.f1pro.data.Net.TooManyRequests) {
                 val mins = ((app.f1pro.data.Net.jolpicaBlockedUntil - System.currentTimeMillis()) / 60_000L + 1).coerceAtLeast(1)
                 careerError[driverId] = "The results service has had too many requests. Try again in about $mins min."
