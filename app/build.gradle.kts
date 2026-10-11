@@ -77,8 +77,8 @@ dependencies {
     // Liquid glass: Kyant's Backdrop, the same version Afli uses.
     implementation("io.github.kyant0:backdrop:2.0.1")
     // Coil 3: photos (driver headshots) loaded off the main thread with memory + disk caches.
-    implementation("io.coil-kt.coil3:coil-compose:3.+")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.+")
+    implementation("io.coil-kt.coil3:coil-compose:3.6.3")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
