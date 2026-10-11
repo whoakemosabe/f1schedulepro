@@ -315,7 +315,10 @@ private fun RaceDetailPager(
     }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding()).height(SectionRowHeight),
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding(), bottom = 12.dp)
+                .height(SectionRowHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -398,7 +401,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + LocalChrome.current.calculateBottomPadding()),
+            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp + LocalChrome.current.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Hero

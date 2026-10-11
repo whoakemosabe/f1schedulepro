@@ -75,17 +75,17 @@ fun F1App(state: AppState) {
             }
 
             CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
+                // The frost reaches 20 dp past the header to fade out; it is drawn on its own so
+                // that fade isn't counted as header height (pages would start 20 dp too low).
+                var headerPx by remember { mutableIntStateOf(0) }
+                GlassHeader(pageBackdrop, with(density) { headerPx.toDp() } + 20.dp, Modifier.align(Alignment.TopCenter))
                 Column(
                     Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .onSizeChanged { topPx = it.height }
                 ) {
-                    var headerPx by remember { mutableIntStateOf(0) }
-                    Box(Modifier.fillMaxWidth()) {
-                        GlassHeader(pageBackdrop, with(density) { headerPx.toDp() } + 20.dp)
-                        Box(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) { Header(state) }
-                    }
+                    Box(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) { Header(state) }
                     UpdateBanner()
                     CrashCard(state)
                 }
