@@ -135,7 +135,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = pagePadding(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(PageGap),
     ) {
         item {
             Row(
@@ -402,7 +402,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(start = 12.dp, end = 12.dp, bottom = 12.dp + LocalChrome.current.calculateBottomPadding()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(PageGap),
     ) {
         // Hero
         Column(

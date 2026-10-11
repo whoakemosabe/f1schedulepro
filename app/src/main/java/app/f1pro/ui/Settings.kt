@@ -180,7 +180,7 @@ fun SettingsPage(state: AppState) {
 
     Column(
         Modifier.fillMaxSize().verticalScroll(scroll).padding(pagePadding()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(PageGap),
     ) {
         // ── Appearance ──
         SettingsCard("Appearance", R.drawable.lc_moon) {

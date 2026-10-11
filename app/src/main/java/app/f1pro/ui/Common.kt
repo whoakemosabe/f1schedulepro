@@ -398,6 +398,9 @@ fun RefreshBox(
 /** Height of the row at the top of a page (legend, section title, back and arrows). */
 val SectionRowHeight = 40.dp
 
+/** The gap between cards, the same on every page. */
+val PageGap = 10.dp
+
 /** The page's own padding plus room for the header and tab bar. The same on every page. */
 @Composable
 fun pagePadding(horizontal: Dp = 12.dp, top: Dp = 12.dp, bottom: Dp = 12.dp): androidx.compose.foundation.layout.PaddingValues {

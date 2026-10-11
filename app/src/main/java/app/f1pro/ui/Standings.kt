@@ -87,7 +87,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = pagePadding(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(PageGap),
         ) {
             if (st != null && calendarYear != null && st.season in 1 until calendarYear) {
                 item {
@@ -122,7 +122,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                     if (view == "drivers") 0 else 1,
                     Modifier.fillMaxWidth(),
                     icons = listOf(R.drawable.lc_trophy, R.drawable.lc_users),
-                    height = 44.dp,
+                    height = SectionRowHeight,
                 ) {
                     view = if (it == 0) "drivers" else "constructors"
                     state.prefs.standingsView = view

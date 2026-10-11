@@ -116,7 +116,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = pagePadding(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(PageGap),
             ) {
                 item {
                     Wrap(gap = 6.dp) {
