@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.PaddingValues
@@ -51,9 +52,16 @@ fun F1App(state: AppState) {
     val tabs = Tab.entries
     val pager = rememberPagerState(initialPage = tabs.indexOf(state.tab)) { tabs.size }
     val view = androidx.compose.ui.platform.LocalView.current
+    // A tab tap jumps straight there with a quick fade (no sliding through the tabs in
+    // between); a swipe moves the pages under your finger and sets the tab when it settles.
+    val fade = remember { androidx.compose.animation.core.Animatable(1f) }
     LaunchedEffect(state.tab) {
         val i = tabs.indexOf(state.tab)
-        if (pager.currentPage != i || pager.targetPage != i) pager.animateScrollToPage(i)
+        if (pager.currentPage != i && !pager.isScrollInProgress) {
+            pager.scrollToPage(i)
+            fade.snapTo(0f)
+            fade.animateTo(1f, androidx.compose.animation.core.tween(220))
+        }
     }
     LaunchedEffect(pager) {
         snapshotFlow { pager.settledPage }.collect { i ->
@@ -81,7 +89,12 @@ fun F1App(state: AppState) {
                     // the swipe moves between races).
                     HorizontalPager(
                         state = pager,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = 0.3f + 0.7f * fade.value
+                                translationY = (1f - fade.value) * 10.dp.toPx()
+                            },
                         userScrollEnabled = !(state.raceOpen && state.tab == Tab.Schedule),
                         key = { tabs[it] },
                     ) { page ->
