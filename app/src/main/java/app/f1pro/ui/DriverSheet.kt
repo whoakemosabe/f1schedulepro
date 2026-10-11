@@ -188,7 +188,16 @@ private fun ColumnScope.DriverPanel(state: AppState, st: Standings, d: DriverSta
     }
 
     PanelLabel("CAREER")
-    if (career != null) CareerBox(career) else Skeleton(110.dp)
+    val careerId = season?.driverId
+    when {
+        career != null -> CareerBox(career)
+        careerId != null && state.careerFailed[careerId] == true -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Couldn't load career stats.", style = inter(12.sp, color = C.TextMuted), modifier = Modifier.weight(1f))
+            Chip("Retry", icon = R.drawable.lc_refresh_cw, iconColor = C.AccentText) { state.loadCareer(careerId, st.season, retry = true) }
+        }
+        careerId == null && !loading -> Text("Career stats show once they've raced this season.", style = inter(12.sp, color = C.TextMuted))
+        else -> Skeleton(110.dp)
+    }
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         val isFav = state.favourite?.matches(d.name, d.surname) == true

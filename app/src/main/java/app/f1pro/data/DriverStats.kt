@@ -151,6 +151,80 @@ object DriverStats {
         return DriverSeason(season, driverId, code, number, rounds.sortedBy { it.round })
     }
 
+    /** Every driver's season at once, from the whole-season pages (see [Repo.seasonStats]). */
+    data class SeasonStats(val season: Int, val entries: List<Entry>, val drivers: Map<String, DriverSeason>, val fetchedAt: Long = 0L)
+
+    /** Offsets for the pages after the first, for a query with [total] rows. */
+    fun pageOffsets(total: Int, limit: Int = 100): List<Int> = (limit until total step limit).toList()
+
+    /**
+     * Builds every driver's season from /{season}/results, /qualifying and /sprint, each given
+     * as one or more pages (a race can be split across two pages; rows are merged by round).
+     */
+    fun seasonAll(season: Int, resultsPages: List<String>, qualiPages: List<String>, sprintPages: List<String>, fetchedAt: Long = 0L): SeasonStats {
+        val quali = HashMap<Pair<String, Int>, Int>()
+        for (page in qualiPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) {
+                val r = rs.getJSONObject(i)
+                val round = r.optString("round").toIntOrNull() ?: continue
+                val rows = r.optJSONArray("QualifyingResults") ?: continue
+                for (j in 0 until rows.length()) {
+                    val q = rows.getJSONObject(j)
+                    val id = q.optJSONObject("Driver")?.optString("driverId")?.takeIf { it.isNotBlank() } ?: continue
+                    q.optString("position").toIntOrNull()?.let { quali[id to round] = it }
+                }
+            }
+        }
+        val sprint = HashMap<Pair<String, Int>, Pair<Int?, Double>>()
+        for (page in sprintPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) {
+                val r = rs.getJSONObject(i)
+                val round = r.optString("round").toIntOrNull() ?: continue
+                val rows = r.optJSONArray("SprintResults") ?: continue
+                for (j in 0 until rows.length()) {
+                    val q = rows.getJSONObject(j)
+                    val id = q.optJSONObject("Driver")?.optString("driverId")?.takeIf { it.isNotBlank() } ?: continue
+                    sprint[id to round] = q.optString("positionText").toIntOrNull() to (q.optString("points").toDoubleOrNull() ?: 0.0)
+                }
+            }
+        }
+        val rounds = HashMap<String, HashMap<Int, DriverRound>>()
+        val entries = LinkedHashMap<String, Entry>()
+        val codes = HashMap<String, String>()
+        val numbers = HashMap<String, String>()
+        for (page in resultsPages) races(page)?.let { rs ->
+            for (i in 0 until rs.length()) {
+                val r = rs.getJSONObject(i)
+                val round = r.optString("round").toIntOrNull() ?: continue
+                val rows = r.optJSONArray("Results") ?: continue
+                for (j in 0 until rows.length()) {
+                    val res = rows.getJSONObject(j)
+                    val d = res.optJSONObject("Driver") ?: continue
+                    val id = d.optString("driverId").takeIf { it.isNotBlank() } ?: continue
+                    entries.getOrPut(id) { Entry(id, d.optString("givenName"), d.optString("familyName")) }
+                    d.optString("code").takeIf { it.isNotBlank() }?.let { codes[id] = it }
+                    d.optString("permanentNumber").takeIf { it.isNotBlank() }?.let { numbers[id] = it }
+                    val sp = sprint[id to round]
+                    rounds.getOrPut(id) { HashMap() }[round] = DriverRound(
+                        round = round,
+                        raceName = r.optString("raceName"),
+                        finish = res.optString("positionText").toIntOrNull(),
+                        order = res.optString("position").toIntOrNull() ?: 99,
+                        status = res.optString("status"),
+                        points = res.optString("points").toDoubleOrNull() ?: 0.0,
+                        quali = quali[id to round],
+                        grid = res.optString("grid").toIntOrNull(),
+                        fastestRank = res.optJSONObject("FastestLap")?.optString("rank")?.toIntOrNull(),
+                        sprintFinish = sp?.first,
+                        sprintPoints = sp?.second ?: 0.0,
+                    )
+                }
+            }
+        }
+        val drivers = rounds.mapValues { (id, m) -> DriverSeason(season, id, codes[id], numbers[id], m.values.sortedBy { it.round }) }
+        return SeasonStats(season, entries.values.toList(), drivers, fetchedAt)
+    }
+
     fun headToHead(a: DriverSeason, b: DriverSeason): HeadToHead {
         val bBy = b.rounds.associateBy { it.round }
         var ra = 0; var rb = 0; var qa = 0; var qb = 0

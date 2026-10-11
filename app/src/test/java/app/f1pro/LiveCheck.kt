@@ -55,6 +55,21 @@ class LiveCheck {
             }
         } catch (e: Exception) { line(false, "Results: ${e.message}") }
         try {
+            // The panels' whole-season download: every page of results, qualifying and sprints.
+            fun pages(url: String): List<String> {
+                val first = Net.get("$url?limit=100")
+                return listOf(first) + app.f1pro.data.DriverStats.pageOffsets(app.f1pro.data.DriverStats.total(first)).map { Net.get("$url?limit=100&offset=$it") }
+            }
+            val r = pages("${Repo.JOLPICA}/$year/results.json")
+            val q = pages("${Repo.JOLPICA}/$year/qualifying.json")
+            val sp = pages("${Repo.JOLPICA}/$year/sprint.json")
+            val all = app.f1pro.data.DriverStats.seasonAll(year, r, q, sp)
+            val rounds = all.drivers.values.maxOfOrNull { it.rounds.size } ?: 0
+            val short = all.drivers.values.filter { it.rounds.size < rounds }.map { it.driverId }
+            line(all.drivers.size >= 20, "Season data $year: ${r.size + q.size + sp.size} requests, ${all.drivers.size} drivers, $rounds rounds" +
+                (if (short.isNotEmpty()) " (fewer for ${short.joinToString(", ")})" else ""))
+        } catch (e: Exception) { line(false, "Season data: ${e.message}") }
+        try {
             // The driver panel: the standings leader's season, round by round, and vs teammate.
             val entries = app.f1pro.data.DriverStats.entries(Net.get("${Repo.JOLPICA}/$year/driverStandings.json"))
             val lead = entries.firstOrNull()

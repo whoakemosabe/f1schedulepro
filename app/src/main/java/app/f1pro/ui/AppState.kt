@@ -214,11 +214,22 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     val careers = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.DriverCareer>()
     private val careerLoading = HashSet<String>()
 
-    fun loadCareer(driverId: String, season: Int) {
+    /** Career totals that couldn't be loaded (shown with a Retry instead of a skeleton). */
+    val careerFailed = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun loadCareer(driverId: String, season: Int, retry: Boolean = false) {
         if (careers.containsKey(driverId) || !careerLoading.add(driverId)) return
+        if (!retry && careerFailed[driverId] == true) { careerLoading.remove(driverId); return }
+        careerFailed.remove(driverId)
         scope.launch {
-            try { repo.driverCareer(driverId, season)?.let { careers[driverId] = it } } catch (e: Exception) { }
-            finally { careerLoading.remove(driverId) }
+            try {
+                val c = repo.driverCareer(driverId, season)
+                if (c != null) careers[driverId] = c else careerFailed[driverId] = true
+            } catch (e: Exception) {
+                careerFailed[driverId] = true
+            } finally {
+                careerLoading.remove(driverId)
+            }
         }
     }
 
@@ -238,16 +249,39 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         openRaceKey = key
     }
 
+    /** Season → every driver's numbers (one download per season, see Repo.seasonStats). */
+    private val seasonStats = HashMap<Int, app.f1pro.data.DriverStats.SeasonStats>()
+    private val seasonStatsLoading = HashSet<Int>()
+
+    /** The season's finished races' end time, newest: the season data is refreshed after it. */
+    private fun lastRaceEnd(season: Int, now: Long = System.currentTimeMillis()): Long? =
+        seasons.firstOrNull { it.year == season }?.races
+            ?.mapNotNull { r -> r.raceSession?.end?.takeIf { it < now } }?.maxOrNull()
+
+    /** Fills [driverSeasons] for every driver in the standings from one season download. */
+    private fun publish(season: Int, stats: app.f1pro.data.DriverStats.SeasonStats) {
+        seasonStats[season] = stats
+        val st = standings ?: return
+        if (st.season != season) return
+        for (d in st.drivers) {
+            val id = app.f1pro.data.DriverStats.findId(stats.entries, d.name, d.surname) ?: continue
+            stats.drivers[id]?.let { driverSeasons[driverKey(season, d)] = it }
+        }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
     fun loadDriverSeason(season: Int, d: app.f1pro.data.DriverStanding) {
-        val k = driverKey(season, d)
-        if (driverSeasonLoading[k] == true || driverSeasons.containsKey(k)) return
-        driverSeasonLoading[k] = true
+        if (seasonStats.containsKey(season) || !seasonStatsLoading.add(season)) return
+        for (x in standings?.drivers.orEmpty()) driverSeasonLoading[driverKey(season, x)] = !driverSeasons.containsKey(driverKey(season, x))
         scope.launch {
             try {
-                repo.driverSeason(season, d.name, d.surname)?.let { driverSeasons[k] = it }
+                // What's saved first (instant), then a fresh copy if a race has finished since.
+                withContext(Dispatchers.IO) { repo.cachedSeasonStats(season) }?.let { publish(season, it) }
+                repo.seasonStats(season, lastRaceEnd(season))?.let { publish(season, it) }
             } catch (e: Exception) {
             } finally {
-                driverSeasonLoading[k] = false
+                seasonStatsLoading.remove(season)
+                for (x in standings?.drivers.orEmpty()) driverSeasonLoading[driverKey(season, x)] = false
             }
         }
     }
@@ -260,6 +294,9 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     fun onOpen() {
         fmt = Fmt(prefs.zone(), prefs.is24h(context))
+        // Panels re-check their season data next time (cheap: the saved copy is used unless
+        // a race has finished since).
+        seasonStats.clear()
         if (System.currentTimeMillis() - repo.lastCalendarCheck() > 6 * HOUR_MS) refreshCalendar()
         val st = standings
         if (st == null || System.currentTimeMillis() - st.fetchedAt > 30 * MIN_MS) loadStandings()

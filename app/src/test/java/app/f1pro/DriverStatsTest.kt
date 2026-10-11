@@ -88,4 +88,35 @@ class DriverStatsTest {
         assertEquals("https://media.formula1.com/x.png", h["hulkenberg"])
         assertEquals(null, h["norris"])
     }
+
+    @Test
+    fun wholeSeasonPagesMergeByRoundAndDriver() {
+        fun row(id: String, given: String, family: String, pos: Int, pts: Int) =
+            """{"position":"$pos","positionText":"$pos","points":"$pts","grid":"$pos","status":"Finished",
+               "Driver":{"driverId":"$id","permanentNumber":"${pos + 10}","code":"${id.take(3).uppercase()}","givenName":"$given","familyName":"$family"}}"""
+        // Round 2 is split across the two pages, as Jolpica does at a page boundary.
+        val page1 = """{"MRData":{"total":"6","RaceTable":{"Races":[
+            {"round":"1","raceName":"Race 1","Results":[${row("norris", "Lando", "Norris", 1, 25)},${row("piastri", "Oscar", "Piastri", 2, 18)}]},
+            {"round":"2","raceName":"Race 2","Results":[${row("piastri", "Oscar", "Piastri", 1, 25)}]}]}}}"""
+        val page2 = """{"MRData":{"total":"6","RaceTable":{"Races":[
+            {"round":"2","raceName":"Race 2","Results":[${row("norris", "Lando", "Norris", 2, 18)}]},
+            {"round":"3","raceName":"Race 3","Results":[${row("norris", "Lando", "Norris", 1, 25)},${row("hulkenberg", "Nico", "Hülkenberg", 3, 15)}]}]}}}"""
+        val quali = """{"MRData":{"RaceTable":{"Races":[{"round":"1","QualifyingResults":[
+            {"position":"1","Driver":{"driverId":"piastri"}},{"position":"2","Driver":{"driverId":"norris"}}]}]}}}"""
+        val sprint = """{"MRData":{"RaceTable":{"Races":[{"round":"3","SprintResults":[
+            {"positionText":"1","points":"8","Driver":{"driverId":"norris"}}]}]}}}"""
+        val s = DriverStats.seasonAll(2025, listOf(page1, page2), listOf(quali), listOf(sprint), 123L)
+        assertEquals(3, s.entries.size)
+        assertEquals(123L, s.fetchedAt)
+        val nor = s.drivers.getValue("norris")
+        assertEquals(listOf(1, 2, 3), nor.rounds.map { it.round })
+        assertEquals(76.0, nor.totalPoints, 0.0)
+        assertEquals(2, nor.rounds.first().quali)
+        assertEquals(8.0, nor.rounds.last().sprintPoints, 0.0)
+        assertEquals("11", nor.number)
+        assertEquals(listOf(1, 2), s.drivers.getValue("piastri").rounds.map { it.round })
+        assertEquals("hulkenberg", DriverStats.findId(s.entries, "Nico", "Hulkenberg"))
+        assertEquals(listOf(100, 200, 300), DriverStats.pageOffsets(350))
+        assertEquals(emptyList<Int>(), DriverStats.pageOffsets(100))
+    }
 }
