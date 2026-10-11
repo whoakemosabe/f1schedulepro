@@ -28,16 +28,43 @@ object Updater {
 
     data class Release(val version: String, val assetUrl: String, val sizeBytes: Long, val notes: List<String> = emptyList())
 
-    /** The "What's new" bullets from a release's notes (the list CI writes at the top). */
+    /**
+     * The bullets from a release's notes: the hand-written "Highlights" when the release has
+     * them (written for people, not developers), else the commit titles under "What's new".
+     */
     fun whatsNew(body: String): List<String> {
-        val out = ArrayList<String>()
-        var inList = false
+        val sections = HashMap<String, MutableList<String>>()
+        var current: String? = null
         for (line in body.lines()) {
             val t = line.trim()
-            if (t.startsWith("###")) { if (inList) break; inList = t.contains("What's new", ignoreCase = true); continue }
-            if (inList && t.startsWith("- ")) out += t.removePrefix("- ").trim()
+            if (t.startsWith("###")) {
+                current = when {
+                    t.contains("Highlights", ignoreCase = true) -> "h"
+                    t.contains("What's new", ignoreCase = true) -> "w"
+                    else -> null
+                }
+                continue
+            }
+            if (t.startsWith("**")) current = null
+            if (current != null && t.startsWith("- ")) sections.getOrPut(current) { ArrayList() } += t.removePrefix("- ").trim()
         }
-        return out.take(8)
+        return (sections["h"] ?: sections["w"]).orEmpty().take(8)
+    }
+
+    /**
+     * Everything new since [installed], newest release first: someone who skipped a few
+     * versions sees all of their highlights, not just the last one's.
+     */
+    fun notesSince(releasesJson: String, installed: String): List<String> {
+        val arr = org.json.JSONArray(releasesJson)
+        val out = LinkedHashSet<String>()
+        for (i in 0 until arr.length()) {
+            val r = arr.getJSONObject(i)
+            if (r.optBoolean("draft") || r.optBoolean("prerelease")) continue
+            if (!isNewer(r.optString("tag_name"), installed)) continue
+            out += whatsNew(r.optString("body"))
+        }
+        return out.take(10)
     }
 
     sealed class Check {
@@ -83,7 +110,17 @@ object Updater {
             }
             val apk = asset ?: return@withContext Check.Failed("The latest release has no APK yet.")
             if (!isNewer(tag, installedVersion(context))) return@withContext Check.UpToDate
-            Check.Available(Release(tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size"), whatsNew(json.optString("body"))))
+            val installed = installedVersion(context)
+            val notes = try {
+                val r = open("https://api.github.com/repos/$REPO/releases?per_page=15", "application/vnd.github+json")
+                val body = if (r.responseCode in 200..299) r.inputStream.bufferedReader().use { it.readText() } else null
+                r.disconnect()
+                body?.let { notesSince(it, installed) }
+            } catch (e: Exception) { null }
+            Check.Available(Release(
+                tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size"),
+                notes?.takeIf { it.isNotEmpty() } ?: whatsNew(json.optString("body")),
+            ))
         } catch (e: Exception) {
             Check.Failed("Couldn't reach GitHub.")
         }
@@ -180,6 +217,9 @@ object UpdateWatch {
     /** The version whose banner was closed with ×. */
     var bannerHidden by mutableStateOf<String?>(null)
 
+    /** Opens the "What's new" popup again (Settings → Updates). */
+    val whatsNewOpen = mutableStateOf(false)
+
     /** Set when the app should open Settings → Updates (e.g. from the notification). */
     val openUpdates = mutableStateOf(false)
 
@@ -195,6 +235,18 @@ object UpdateWatch {
         waitingVersion = waiting(context)
     }
 
+    /** The waiting version's highlights, as saved with it. */
+    fun notes(context: Context): List<String> =
+        Prefs(context).availableNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** True once per version: the "What's new" popup should open for [version]. */
+    fun shouldShowWhatsNew(context: Context, version: String): Boolean =
+        Prefs(context).whatsNewShown != version && notes(context).isNotEmpty()
+
+    fun whatsNewSeen(context: Context, version: String) {
+        Prefs(context).whatsNewShown = version
+    }
+
     /** Asks GitHub if it's been long enough (or [force]); returns the newer version waiting. */
     suspend fun check(context: Context, background: Boolean, force: Boolean = false): String? {
         val p = Prefs(context)
@@ -203,7 +255,10 @@ object UpdateWatch {
         if (force || now - p.lastUpdateCheck >= every) {
             p.lastUpdateCheck = now
             when (val r = Updater.check(context)) {
-                is Updater.Check.Available -> p.availableVersion = r.release.version
+                is Updater.Check.Available -> {
+                    p.availableVersion = r.release.version
+                    p.availableNotes = r.release.notes.joinToString("\n")
+                }
                 Updater.Check.UpToDate -> p.availableVersion = ""
                 is Updater.Check.Failed -> {}
             }
@@ -232,6 +287,7 @@ object UpdateWatch {
         ui = when (val r = Updater.check(context)) {
             is Updater.Check.Available -> {
                 Prefs(context).availableVersion = r.release.version
+                Prefs(context).availableNotes = r.release.notes.joinToString("\n")
                 waitingVersion = waiting(context)
                 UpdateUi.Available(r.release)
             }

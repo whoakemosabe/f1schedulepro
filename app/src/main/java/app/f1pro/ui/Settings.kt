@@ -423,6 +423,9 @@ private fun UpdatesCard(highlighted: Boolean) {
             Text("Installed", style = inter(13.sp, color = C.TextSecondary), modifier = Modifier.weight(1f))
             Text("v" + Updater.installedVersion(context), style = inter(13.sp, FontWeight.SemiBold))
         }
+        if (waiting != null && UpdateWatch.notes(context).isNotEmpty()) {
+            Chip("What's new in v$waiting", icon = R.drawable.lc_zap, iconColor = C.AccentText) { UpdateWatch.whatsNewOpen.value = true }
+        }
         Small("F1 Pro checks GitHub for new versions by itself. When one is out, a banner shows at the top: tap it to download, tap again to install. Checking here asks before downloading. It installs over this one and keeps your settings.")
         val label = when (ui) {
             UpdateUi.Idle -> if (waiting != null) "Download v$waiting" else "Check for updates"

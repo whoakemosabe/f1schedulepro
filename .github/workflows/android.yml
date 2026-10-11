@@ -139,6 +139,13 @@ jobs:
             echo
             # What's new: commit titles since the previous release tag.
             prev=$(git describe --tags --abbrev=0 --match 'v2.0.*' HEAD^ 2>/dev/null || true)
+            # Highlights: the hand-written, people-facing list in whatsnew.md, when it was
+            # updated for this release. The app's "What's new" popup shows these.
+            if [ -f whatsnew.md ] && { [ -z "$prev" ] || ! git diff --quiet "$prev" HEAD -- whatsnew.md; }; then
+              echo "### Highlights"
+              grep '^- ' whatsnew.md | head -10
+              echo
+            fi
             if [ -n "$prev" ]; then
               echo "### What's new since $prev"
               git log --no-merges --pretty='- %s' "$prev..HEAD" | head -25

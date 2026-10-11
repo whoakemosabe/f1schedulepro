@@ -131,6 +131,16 @@ class Prefs(context: Context) {
         get() = p.getString("available_version", "") ?: ""
         set(v) = p.edit().putString("available_version", v).apply()
 
+    /** The waiting version's highlights, one per line (for the "What's new" popup). */
+    var availableNotes: String
+        get() = p.getString("available_notes", "") ?: ""
+        set(v) = p.edit().putString("available_notes", v).apply()
+
+    /** The version whose "What's new" popup has been shown (once per version). */
+    var whatsNewShown: String
+        get() = p.getString("whats_new_shown", "") ?: ""
+        set(v) = p.edit().putString("whats_new_shown", v).apply()
+
     var notifiedVersion: String
         get() = p.getString("notified_version", "") ?: ""
         set(v) = p.edit().putString("notified_version", v).apply()

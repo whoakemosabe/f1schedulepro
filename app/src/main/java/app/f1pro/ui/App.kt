@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -150,6 +151,26 @@ fun F1App(state: AppState) {
 
             // Driver / team panels slide up over everything, header and tab bar included.
             state.standings?.let { StandingsSheets(state, it) }
+
+            // A new version found: its highlights pop up once (or again from Settings).
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val updScope = androidx.compose.runtime.rememberCoroutineScope()
+            val waiting = app.f1pro.work.UpdateWatch.waitingVersion
+            var reopen by app.f1pro.work.UpdateWatch.whatsNewOpen
+            val auto = remember(waiting) { waiting != null && app.f1pro.work.UpdateWatch.shouldShowWhatsNew(ctx, waiting) }
+            var dismissed by remember(waiting) { androidx.compose.runtime.mutableStateOf(false) }
+            if (waiting != null && (reopen || (auto && !dismissed))) {
+                val notes = remember(waiting) { app.f1pro.work.UpdateWatch.notes(ctx) }
+                fun close() { dismissed = true; reopen = false; app.f1pro.work.UpdateWatch.whatsNewSeen(ctx, waiting) }
+                if (notes.isNotEmpty()) WhatsNewDialog(
+                    waiting, notes,
+                    onUpdate = {
+                        close()
+                        updScope.launch { try { app.f1pro.work.UpdateWatch.tap(ctx) } catch (e: Exception) { } }
+                    },
+                    onLater = { close() },
+                )
+            }
         }
     }
 }
