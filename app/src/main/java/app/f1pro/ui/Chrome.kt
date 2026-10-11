@@ -267,6 +267,7 @@ fun UpdateBanner() {
                             is app.f1pro.work.UpdateUi.Downloading -> "Downloading… ${(app.f1pro.work.UpdateWatch.progress * 100).toInt()}%"
                             is app.f1pro.work.UpdateUi.Ready -> ui.note ?: "Downloaded. Tap to install"
                             is app.f1pro.work.UpdateUi.Error -> ui.message
+                            is app.f1pro.work.UpdateUi.Available -> "Tap to download"
                         },
                         style = inter(12.sp, color = C.TextSecondary),
                     )

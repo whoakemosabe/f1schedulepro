@@ -26,7 +26,19 @@ object Updater {
     const val REPO = "whoakemosabe/f1schedulepro"
     const val RELEASES_URL = "https://github.com/$REPO/releases/latest"
 
-    data class Release(val version: String, val assetUrl: String, val sizeBytes: Long)
+    data class Release(val version: String, val assetUrl: String, val sizeBytes: Long, val notes: List<String> = emptyList())
+
+    /** The "What's new" bullets from a release's notes (the list CI writes at the top). */
+    fun whatsNew(body: String): List<String> {
+        val out = ArrayList<String>()
+        var inList = false
+        for (line in body.lines()) {
+            val t = line.trim()
+            if (t.startsWith("###")) { if (inList) break; inList = t.contains("What's new", ignoreCase = true); continue }
+            if (inList && t.startsWith("- ")) out += t.removePrefix("- ").trim()
+        }
+        return out.take(8)
+    }
 
     sealed class Check {
         data object UpToDate : Check()
@@ -71,7 +83,7 @@ object Updater {
             }
             val apk = asset ?: return@withContext Check.Failed("The latest release has no APK yet.")
             if (!isNewer(tag, installedVersion(context))) return@withContext Check.UpToDate
-            Check.Available(Release(tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size")))
+            Check.Available(Release(tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size"), whatsNew(json.optString("body"))))
         } catch (e: Exception) {
             Check.Failed("Couldn't reach GitHub.")
         }
@@ -146,6 +158,8 @@ sealed class UpdateUi {
     data object UpToDate : UpdateUi()
     data class Downloading(val version: String) : UpdateUi()
     data class Ready(val file: File, val version: String, val note: String? = null) : UpdateUi()
+    /** Found a newer version; waiting for "Download" (Settings asks before downloading). */
+    data class Available(val release: Updater.Release) : UpdateUi()
     data class Error(val message: String) : UpdateUi()
 }
 
@@ -209,6 +223,46 @@ object UpdateWatch {
     }
 
     /**
+     * Settings → Check for updates: only checks. A newer version becomes [UpdateUi.Available]
+     * and Settings asks before downloading it.
+     */
+    suspend fun checkOnly(context: Context) {
+        if (ui is UpdateUi.Checking || ui is UpdateUi.Downloading) return
+        ui = UpdateUi.Checking
+        ui = when (val r = Updater.check(context)) {
+            is Updater.Check.Available -> {
+                Prefs(context).availableVersion = r.release.version
+                waitingVersion = waiting(context)
+                UpdateUi.Available(r.release)
+            }
+            Updater.Check.UpToDate -> {
+                Prefs(context).availableVersion = ""
+                waitingVersion = null
+                UpdateUi.UpToDate
+            }
+            is Updater.Check.Failed -> UpdateUi.Error(r.message)
+        }
+    }
+
+    /** "Not now" on the confirm: back to idle; the banner still offers it. */
+    fun notNow() {
+        if (ui is UpdateUi.Available) ui = UpdateUi.Idle
+    }
+
+    private suspend fun download(context: Context, release: Updater.Release): Boolean {
+        ui = UpdateUi.Downloading(release.version)
+        progress = 0f
+        return try {
+            val f = Updater.download(context, release) { progress = it }
+            ui = UpdateUi.Ready(f, release.version)
+            true
+        } catch (e: Exception) {
+            ui = UpdateUi.Error("Download failed. Tap to try again.")
+            false
+        }
+    }
+
+    /**
      * One tap: check → download → ready; a tap when ready installs. Returns true when the
      * download finished (for a confirm haptic).
      */
@@ -218,25 +272,13 @@ object UpdateWatch {
                 if (!Updater.install(context, st.file)) ui = st.copy(note = "Allow F1 Pro to install updates, then tap again.")
                 return false
             }
+            is UpdateUi.Available -> return download(context, st.release)
             is UpdateUi.Checking, is UpdateUi.Downloading -> return false
             else -> {}
         }
         ui = UpdateUi.Checking
         return when (val r = Updater.check(context)) {
-            is Updater.Check.Available -> {
-                Prefs(context).availableVersion = r.release.version
-                waitingVersion = waiting(context)
-                ui = UpdateUi.Downloading(r.release.version)
-                progress = 0f
-                try {
-                    val f = Updater.download(context, r.release) { progress = it }
-                    ui = UpdateUi.Ready(f, r.release.version)
-                    true
-                } catch (e: Exception) {
-                    ui = UpdateUi.Error("Download failed. Tap to try again.")
-                    false
-                }
-            }
+            is Updater.Check.Available -> download(context, r.release)
             Updater.Check.UpToDate -> {
                 Prefs(context).availableVersion = ""
                 waitingVersion = null

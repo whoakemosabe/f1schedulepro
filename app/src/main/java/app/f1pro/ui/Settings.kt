@@ -420,12 +420,13 @@ private fun UpdatesCard(highlighted: Boolean) {
             Text("Installed", style = inter(13.sp, color = C.TextSecondary), modifier = Modifier.weight(1f))
             Text("v" + Updater.installedVersion(context), style = inter(13.sp, FontWeight.SemiBold))
         }
-        Small("F1 Pro checks GitHub for new versions by itself. When one is out, a banner shows at the top: tap it to download, tap again to install. It installs over this one and keeps your settings.")
+        Small("F1 Pro checks GitHub for new versions by itself. When one is out, a banner shows at the top: tap it to download, tap again to install. Checking here asks before downloading. It installs over this one and keeps your settings.")
         val label = when (ui) {
             UpdateUi.Idle -> if (waiting != null) "Download v$waiting" else "Check for updates"
             UpdateUi.Checking -> "Checking…"
             is UpdateUi.Downloading -> "Downloading… ${(UpdateWatch.progress * 100).toInt()}%"
             is UpdateUi.Ready -> "Install v${ui.version}"
+            is UpdateUi.Available -> "Download v${ui.release.version}"
             is UpdateUi.Error -> "Try again"
             UpdateUi.UpToDate -> "Check again"
         }
@@ -436,12 +437,49 @@ private fun UpdatesCard(highlighted: Boolean) {
             enabled = ui !is UpdateUi.Checking && ui !is UpdateUi.Downloading,
         ) {
             scope.launch {
-                val ok = UpdateWatch.tap(context)
-                when {
-                    ok -> Haptics.confirm(view)
-                    UpdateWatch.ui is UpdateUi.Error -> Haptics.reject(view)
+                // Ready → install; anything else → check first, and ask before downloading.
+                if (ui is UpdateUi.Ready) {
+                    UpdateWatch.tap(context)
+                } else {
+                    UpdateWatch.checkOnly(context)
+                    when (UpdateWatch.ui) {
+                        is UpdateUi.Available -> Haptics.settle(view)
+                        is UpdateUi.Error -> Haptics.reject(view)
+                        else -> Haptics.tap(view)
+                    }
                 }
             }
+        }
+        // The confirm: version, size and what's new; nothing downloads until "Download".
+        (ui as? UpdateUi.Available)?.let { av ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { UpdateWatch.notNow() },
+                containerColor = C.Surface,
+                title = { Text("F1 Pro v${av.release.version} is available", style = orbitron(15.sp, FontWeight.Bold, C.Text)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val mb = av.release.sizeBytes / 1_048_576.0
+                        Text(
+                            "You have v${Updater.installedVersion(context)}." + if (mb > 0) " Download size " + String.format(java.util.Locale.US, "%.1f", mb) + " MB." else "",
+                            style = inter(13.sp, color = C.TextSecondary),
+                        )
+                        if (av.release.notes.isNotEmpty()) {
+                            Text("What's new", style = inter(13.sp, FontWeight.SemiBold, C.Text), modifier = Modifier.padding(top = 4.dp))
+                            for (n in av.release.notes) Text("• $n", style = inter(12.sp, color = C.TextSecondary))
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        scope.launch { if (UpdateWatch.tap(context)) Haptics.confirm(view) }
+                    }) { Text("Download", style = inter(14.sp, FontWeight.SemiBold, C.Success)) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { UpdateWatch.notNow() }) {
+                        Text("Not now", style = inter(14.sp, FontWeight.Medium, C.TextSecondary))
+                    }
+                },
+            )
         }
         if (ui is UpdateUi.Downloading) ProgressLine(UpdateWatch.progress)
         when (ui) {
