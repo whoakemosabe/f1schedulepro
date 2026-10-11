@@ -299,6 +299,16 @@ class Repo(context: Context) {
 
     private fun seasonStatsFile(season: Int) = File(dir, "season-stats-$season.json")
 
+    /**
+     * Saved before the latest race's results were out (results take about two hours to be
+     * published), and they're out now: fetch again.
+     */
+    private fun stale(savedAt: Long, lastRaceEnd: Long?): Boolean {
+        if (lastRaceEnd == null) return false
+        val published = lastRaceEnd + 2 * HOUR_MS
+        return savedAt < published && System.currentTimeMillis() >= published
+    }
+
     /** Every row of a Jolpica query, page by page (100 a page, paced by [Net]). */
     private fun allPages(url: String): List<String> {
         val first = Net.get("$url?limit=100", "application/json")
@@ -348,10 +358,11 @@ class Repo(context: Context) {
      * ([Net] paces them). Each figure is independent: one that fails is left out rather than
      * losing the lot. Cached for 3 days. Titles come from [champions].
      */
-    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean): DriverCareer? = withContext(Dispatchers.IO) {
+    suspend fun driverCareer(id: String, currentSeason: Int, seasonOver: Boolean, lastRaceEnd: Long? = null): DriverCareer? = withContext(Dispatchers.IO) {
         val f = File(dir, "career2-$id.json")
         val cached = try { JSONObject(f.readText()) } catch (e: Exception) { null }
-        val fresh = cached != null && System.currentTimeMillis() - f.lastModified() < 3 * 24 * HOUR_MS
+        val fresh = cached != null && System.currentTimeMillis() - f.lastModified() < 3 * 24 * HOUR_MS &&
+            !stale(f.lastModified(), lastRaceEnd)
         val o = if (fresh) cached!! else JSONObject()
         if (!fresh) {
             val base = "$JOLPICA/drivers/$id"
@@ -409,9 +420,9 @@ class Repo(context: Context) {
     }
 
     /** This driver's record at a circuit, cached for a day. */
-    suspend fun trackRecord(circuitId: String, driverId: String): TrackRecord? = withContext(Dispatchers.IO) {
+    suspend fun trackRecord(circuitId: String, driverId: String, lastRaceEnd: Long? = null): TrackRecord? = withContext(Dispatchers.IO) {
         val f = File(dir, "track-$circuitId-$driverId.json")
-        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * HOUR_MS) {
+        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * HOUR_MS && !stale(f.lastModified(), lastRaceEnd)) {
             try { return@withContext DriverStats.trackRecord(f.readText()) } catch (e: Exception) { }
         }
         try {
@@ -423,10 +434,10 @@ class Repo(context: Context) {
         }
     }
 
-    /** The driver's official headshot URL (OpenF1, cached with the team colours). */
-    fun headshotUrl(family: String): String? = try {
-        DriverStats.headshots(JSONObject(teamColourFile.readText()).getString("raw"))[Names.norm(family)]
-    } catch (e: Exception) { null }
+    /** Every driver's official headshot URL (OpenF1, saved with the team colours), by family name. */
+    fun headshots(): Map<String, String> = try {
+        DriverStats.headshots(JSONObject(teamColourFile.readText()).getString("raw"))
+    } catch (e: Exception) { emptyMap() }
 
     /** An image, cached on disk for a week. */
     suspend fun image(url: String): ByteArray? = withContext(Dispatchers.IO) {

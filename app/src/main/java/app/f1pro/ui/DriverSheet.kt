@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -128,7 +130,9 @@ private fun DriverPager(state: AppState, st: Standings, first: DriverStanding) {
         }
         Spacer(Modifier.height(10.dp))
         HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), beyondViewportPageCount = 1) { page ->
-            DriverPanel(state, st, drivers[page], active = page == pager.settledPage, tab = tab, onTab = { tab = it })
+            androidx.compose.runtime.CompositionLocalProvider(LocalIntro provides (page == start)) {
+                DriverPanel(state, st, drivers[page], active = page == pager.settledPage, tab = tab, onTab = { tab = it })
+            }
         }
     }
 }
@@ -208,6 +212,7 @@ private fun DriverPanel(state: AppState, st: Standings, d: DriverStanding, activ
                         HeadToHeadBlock(d, mate, season, mateSeason, color)
                         if (season != null && mateSeason != null) DuelStrip(DriverStats.duels(season, mateSeason), color, shade(color), d.surname, mate.surname)
                     }
+                    DataAge(state.seasonDataAt[st.season])
                 }
                 1 -> when {
                     season != null && season.rounds.isNotEmpty() -> RoundList(state, st.season, season, color)
@@ -253,10 +258,29 @@ private fun DriverPanel(state: AppState, st: Standings, d: DriverStanding, activ
     }
 }
 
+/**
+ * Whether this page's numbers and charts animate in: only on the driver the panel opened on.
+ * Swiping on to other drivers shows them settled, so fast swiping doesn't replay everything.
+ */
+private val LocalIntro = androidx.compose.runtime.staticCompositionLocalOf { true }
+
+/** "Updated 2 h ago · pull down on Standings to refresh": how fresh the saved season data is. */
+@Composable
+private fun DataAge(at: Long?) {
+    if (at == null) return
+    val now = rememberNow(60_000)
+    val old = now - at > 24 * 60 * 60_000L
+    Text(
+        (if (old) "Saved data from " + Fmt.ago(at, now) else "Updated " + Fmt.ago(at, now)) + " · pull down on Standings to refresh",
+        style = inter(10.sp, color = if (old) C.Warning else C.TextMuted),
+    )
+}
+
 /** A number that counts up to [target] the first time it shows (and moves to new values). */
 @Composable
 private fun counted(target: Double, from: Double = 0.0, format: (Double) -> String): String {
-    val a = remember { Animatable(from.toFloat()) }
+    val intro = LocalIntro.current
+    val a = remember { Animatable(if (intro) from.toFloat() else target.toFloat()) }
     LaunchedEffect(target) { a.animateTo(target.toFloat(), tween(800, easing = FastOutSlowInEasing)) }
     val v = a.value.toDouble()
     return if (abs(v - target) < 0.01) format(target) else format(kotlin.math.round(v))
@@ -270,13 +294,7 @@ private fun counted(target: Double, from: Double = 0.0, format: (Double) -> Stri
 @Composable
 private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number: String?) {
     val url = remember(d.surname) { state.headshotUrl(d.surname) }
-    val photo by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, url) {
-        value = url?.let { u ->
-            state.image(u)?.let { bytes ->
-                try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() } catch (e: Exception) { null }
-            }
-        }
-    }
+    val context = LocalContext.current
     val shape = RoundedCornerShape(18.dp)
     val deep = lerp(color, Color.Black, 0.72f)
     val light = lerp(color, Color.White, 0.25f)
@@ -315,13 +333,15 @@ private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number
                 modifier = Modifier.align(Alignment.CenterStart).offset(x = 120.dp, y = (-6).dp),
             )
         }
-        photo?.let {
-            Image(
-                it,
-                contentDescription = "${d.name} ${d.surname}",
+        // Coil: downloads and decodes off the main thread, keeps memory and disk caches,
+        // and fades the photo in.
+        url?.let {
+            coil3.compose.AsyncImage(
+                model = coil3.request.ImageRequest.Builder(context).data(it).crossfade(true).build(),
+                contentDescription = "Photo of ${d.name} ${d.surname}",
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.BottomEnd,
-                modifier = Modifier.align(Alignment.BottomEnd).fillMaxHeight().wrapContentWidth().padding(top = 8.dp, end = 4.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).fillMaxHeight().fillMaxWidth(0.5f).padding(top = 8.dp, end = 4.dp),
             )
         }
         // Darken the left so the name stays readable over any livery.
@@ -442,7 +462,8 @@ private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean
     val zero = C.TextMuted
     val grid = C.GlassBorder
     val ring = C.Surface
-    val progress = remember { Animatable(0f) }
+    val intro = LocalIntro.current
+    val progress = remember { Animatable(if (intro) 0f else 1f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
     var sel by remember(gap) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -451,6 +472,7 @@ private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean
             Modifier
                 .fillMaxWidth()
                 .height(90.dp)
+                .semantics { contentDescription = "Points gap to $rivalName by round: " + gap.joinToString(", ") { (r, g) -> "round $r ${Fmt.points(abs(g))} " + if ((if (leader) -g else g) > 0) (if (leader) "ahead" else "behind") else if (g == 0.0) "level" else (if (leader) "behind" else "ahead") } }
                 .pointerInput(gap) {
                     detectTapGestures { p ->
                         val pad = 6.dp.toPx()
@@ -877,7 +899,8 @@ private fun HeadToHeadBlock(a: DriverStanding, b: DriverStanding, sa: DriverSeas
 private fun SplitBar(label: String, a: Double, b: Double, aText: String, bText: String, ca: Color, cb: Color) {
     val total = a + b
     val target = if (total <= 0) 0.5f else (a / total).toFloat().coerceIn(0.02f, 0.98f)
-    val f = remember { Animatable(0.5f) }
+    val intro = LocalIntro.current
+    val f = remember { Animatable(if (intro) 0.5f else target) }
     LaunchedEffect(target) { f.animateTo(target, tween(750, easing = FastOutSlowInEasing)) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -913,7 +936,8 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
     val dnf = C.Live
     val ring = C.Surface
     val guide = C.TextMuted
-    val progress = remember { Animatable(0f) }
+    val intro = LocalIntro.current
+    val progress = remember { Animatable(if (intro) 0f else 1f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
     var sel by remember(lines.map { it.first.driverId }) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -929,10 +953,17 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
             Column(Modifier.fillMaxHeight().width(28.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 for (l in listOf("P1", "P${(worst + 1) / 2}", "P$worst")) Text(l, style = inter(9.sp, color = C.TextMuted))
             }
+            // What a screen reader says for the chart: each driver's finish, round by round.
+            val spoken = lines.mapIndexed { i, (season, _) ->
+                (names.getOrNull(i)?.let { "$it: " } ?: "") + season.rounds.joinToString(", ") { r ->
+                    "round ${r.round} " + (r.finish?.let { "P$it" } ?: "did not finish")
+                }
+            }.joinToString(". ")
             Canvas(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .semantics { contentDescription = "Finishing positions. $spoken" }
                     .pointerInput(rounds) {
                         detectTapGestures { p ->
                             val pad = 6.dp.toPx()

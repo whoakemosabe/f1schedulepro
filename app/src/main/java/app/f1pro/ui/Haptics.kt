@@ -64,7 +64,8 @@ object Haptics {
 /** clickable() with a tap haptic. */
 fun Modifier.tap(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val view = LocalView.current
-    clickable(enabled = enabled) {
+    // Announced as a button by screen readers.
+    clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button) {
         Haptics.tap(view)
         onClick()
     }

@@ -94,6 +94,17 @@ fun BackdropEffectScope.dissolve(fadeTop: Float, fadeBottom: Float) {
  */
 @Composable
 fun GlassHeader(backdrop: LayerBackdrop, height: Dp, modifier: Modifier = Modifier, fade: Dp = 24.dp, margin: Dp = 40.dp) {
+    // Before Android 13 the blur can't fade out and costs more per frame: a plain tinted band
+    // instead (same look at rest, no per-frame redraw of the page behind).
+    if (!glassFull) {
+        val tint = if (C.dark) Color(0xF00C0F1A) else Color(0xF5ECEFF6)
+        Box(
+            modifier.fillMaxWidth().height(height).background(
+                Brush.verticalGradient(0f to tint, 0.75f to tint, 1f to Color.Transparent)
+            )
+        )
+        return
+    }
     val density = LocalDensity.current
     val fadePx = with(density) { fade.toPx() }
     val m = with(density) { margin.roundToPx() }
@@ -151,6 +162,11 @@ fun F1Background(modifier: Modifier = Modifier) {
  */
 @Composable
 fun GlassBar(backdrop: LayerBackdrop, modifier: Modifier = Modifier, margin: Dp = 40.dp) {
+    if (!glassFull) {
+        // Older phones: solid bar, no live blur (see GlassHeader).
+        Box(modifier.background(if (C.dark) Color(0xF50C0F1A) else Color(0xF7F4F6FB)))
+        return
+    }
     val density = LocalDensity.current
     val m = with(density) { margin.roundToPx() }
     val box = remember { floatArrayOf(0f, 0f) }

@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,8 +71,8 @@ import kotlinx.coroutines.delay
 
 /** A Lucide icon from res/drawable, tinted. */
 @Composable
-fun Ic(@DrawableRes id: Int, color: Color, size: Dp = 14.dp, modifier: Modifier = Modifier) {
-    Icon(painterResource(id), contentDescription = null, tint = color, modifier = modifier.size(size))
+fun Ic(@DrawableRes id: Int, color: Color, size: Dp = 14.dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
+    Icon(painterResource(id), contentDescription = contentDescription, tint = color, modifier = modifier.size(size))
 }
 
 /** Wall-clock time that updates every [periodMs], aligned to the period. */
@@ -231,6 +232,8 @@ fun Chip(
 ) {
     Row(
         modifier = modifier
+            // A 48 dp touch area (Android's minimum) around the smaller chip.
+            .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(8.dp))
             .background(if (selected) C.Accent else C.SurfaceLight)
             .border(1.dp, if (selected) C.Accent else C.GlassBorder, RoundedCornerShape(8.dp))

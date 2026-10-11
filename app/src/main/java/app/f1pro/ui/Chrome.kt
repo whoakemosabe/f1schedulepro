@@ -26,6 +26,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -46,13 +52,13 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun Header(state: AppState) {
-    val now = rememberNow(1000)
+    // The header itself redraws every 10 s (which session is live or next); the clock and the
+    // countdown digits tick every second inside their own small pieces.
+    val now = rememberNow(10_000)
     val fmt = LocalFmt.current
     val season = remember(state.seasons, now / 60_000) { state.seasonFor(now) }
-    // Which session is next almost never changes; look it up every 10 seconds.
-    val slowNow = now / 10_000
-    val live = remember(state.seasons, slowNow) { Planner.live(state.seasons, now) }
-    val next = remember(state.seasons, slowNow) { Planner.next(state.seasons, now) }
+    val live = remember(state.seasons, now) { Planner.live(state.seasons, now) }
+    val next = remember(state.seasons, now) { Planner.next(state.seasons, now) }
 
     // A buzz when a session goes live while you're looking.
     val view = androidx.compose.ui.platform.LocalView.current
@@ -86,14 +92,7 @@ fun Header(state: AppState) {
             Spacer(Modifier.width(10.dp))
             Text((season?.year ?: "").toString(), style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.2f))
             Spacer(Modifier.weight(1f))
-            val (clock, ampm) = fmt.clock(now)
-            Text(clock, style = inter(13.sp, FontWeight.Bold, C.Text))
-            if (ampm.isNotEmpty()) {
-                Spacer(Modifier.width(5.dp))
-                Text(ampm, style = inter(10.sp, FontWeight.Medium, C.TextMuted))
-            }
-            Spacer(Modifier.width(8.dp))
-            Badge(fmt.abbr(now), C.Highlight, bgAlpha = 0.1f, borderAlpha = 0.2f)
+            HeaderClock()
         }
 
         if (live != null) {
@@ -117,8 +116,7 @@ fun Header(state: AppState) {
                 Badge(live.session.short, sessionColor(live.session.name), bgAlpha = 0.12f, borderAlpha = 0.2f)
             }
         } else if (next != null) {
-            val cd = Fmt.countdown(next.session.start, now)
-            if (cd.total > 0) {
+            if (next.session.start > now) {
                 FadeLine(C.Highlight.copy(alpha = 0.3f))
                 Row(
                     Modifier.fillMaxWidth().height(SubHeaderRow).background(C.Highlight.copy(alpha = 0.05f)).padding(horizontal = 16.dp),
@@ -136,16 +134,7 @@ fun Header(state: AppState) {
                     Text("·", style = inter(12.sp, color = C.TextMuted.copy(alpha = 0.4f)))
                     Badge(next.session.short, sessionColor(next.session.name), bgAlpha = 0.12f, borderAlpha = 0.2f)
                     Text("·", style = inter(12.sp, color = C.TextMuted.copy(alpha = 0.4f)))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val digit = orbitron(12.sp, FontWeight.Bold, C.Highlight)
-                        val unit = inter(9.sp, FontWeight.SemiBold, C.TextMuted)
-                        if (cd.days > 0) {
-                            FlipText(cd.days.toString(), digit); Text("D", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
-                        }
-                        FlipText(cd.hours.toString().padStart(2, '0'), digit); Text("H", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
-                        FlipText(cd.minutes.toString().padStart(2, '0'), digit); Text("M", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
-                        FlipText(cd.seconds.toString().padStart(2, '0'), digit); Text("S", style = unit, modifier = Modifier.padding(start = 1.dp))
-                    }
+                    HeaderCountdown(next.session.start)
                 }
             }
         }
@@ -156,6 +145,40 @@ fun Header(state: AppState) {
 /** Header rows: the title row, and the live / countdown strip under it. Same side padding. */
 private val HeaderRow = 52.dp
 private val SubHeaderRow = 34.dp
+
+/** The clock and zone badge, ticking every second on their own. */
+@Composable
+private fun HeaderClock() {
+    val now = rememberNow(1000)
+    val fmt = LocalFmt.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val (clock, ampm) = fmt.clock(now)
+        Text(clock, style = inter(13.sp, FontWeight.Bold, C.Text))
+        if (ampm.isNotEmpty()) {
+            Spacer(Modifier.width(5.dp))
+            Text(ampm, style = inter(10.sp, FontWeight.Medium, C.TextMuted))
+        }
+        Spacer(Modifier.width(8.dp))
+        Badge(fmt.abbr(now), C.Highlight, bgAlpha = 0.1f, borderAlpha = 0.2f)
+    }
+}
+
+/** 12D 01H 06M 59S in the header strip, ticking every second on its own. */
+@Composable
+private fun HeaderCountdown(start: Long) {
+    val now = rememberNow(1000)
+    val cd = Fmt.countdown(start, now)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val digit = orbitron(12.sp, FontWeight.Bold, C.Highlight)
+        val unit = inter(9.sp, FontWeight.SemiBold, C.TextMuted)
+        if (cd.days > 0) {
+            FlipText(cd.days.toString(), digit); Text("D", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
+        }
+        FlipText(cd.hours.toString().padStart(2, '0'), digit); Text("H", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
+        FlipText(cd.minutes.toString().padStart(2, '0'), digit); Text("M", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
+        FlipText(cd.seconds.toString().padStart(2, '0'), digit); Text("S", style = unit, modifier = Modifier.padding(start = 1.dp))
+    }
+}
 
 @Composable
 fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
@@ -184,6 +207,7 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
                         Column(
                             Modifier
                                 .weight(1f)
+                                .semantics { role = Role.Tab; selected = active }
                                 .clickable(remember { MutableInteractionSource() }, indication = null) {
                                     if (t != state.tab) Haptics.segment(view) else Haptics.tap(view)
                                     state.tab = t
@@ -276,10 +300,12 @@ fun UpdateBanner() {
                     "×",
                     style = inter(22.sp, FontWeight.Light, C.TextMuted),
                     modifier = Modifier
-                        .clickable(remember { MutableInteractionSource() }, indication = null) {
+                        .minimumInteractiveComponentSize()
+                        .clickable(remember { MutableInteractionSource() }, indication = null, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Hide this update") {
                             Haptics.tap(view)
                             app.f1pro.work.UpdateWatch.bannerHidden = shownVersion
                         }
+                        .semantics { contentDescription = "Hide" }
                         .padding(start = 12.dp, end = 2.dp),
                 )
             }

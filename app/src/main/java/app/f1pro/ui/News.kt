@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -172,13 +173,14 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                         } else 0f
                         Box(
                             Modifier
+                                .minimumInteractiveComponentSize()
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (state.newsLoading) C.Accent.copy(alpha = 0.1f) else Color.Transparent)
                                 .tap(enabled = !state.newsLoading) { state.loadNews(manual = true) },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Ic(R.drawable.lc_refresh_cw, if (state.newsLoading) C.AccentText else C.TextMuted, 14.dp, Modifier.rotate(spin))
+                            Ic(R.drawable.lc_refresh_cw, if (state.newsLoading) C.AccentText else C.TextMuted, 14.dp, Modifier.rotate(spin), contentDescription = "Refresh news")
                         }
                     }
                 }

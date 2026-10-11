@@ -81,6 +81,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
             Haptics.settle(hv)
             pulled = true
             state.loadStandings()
+            state.refreshDriverData()
         },
     ) {
         LazyColumn(

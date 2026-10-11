@@ -38,31 +38,41 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     var tab by mutableStateOf(Tab.Schedule)
 
     /** The last crash's details, shown once so they can be copied. */
-    var lastCrash by mutableStateOf(app.f1pro.CrashLog.read(this.context))
+    var lastCrash by mutableStateOf<String?>(null)
         private set
+
+    /**
+     * False until the saved calendar, standings and news have been read from storage, which
+     * happens off the main thread so the first frame isn't held up. The app shows its plain
+     * background until then (a few tens of milliseconds).
+     */
+    var ready by mutableStateOf(false)
+        private set
+    private var openWhenReady = false
 
     fun dismissCrash() {
         app.f1pro.CrashLog.clear(context)
         lastCrash = null
     }
 
-    var seasons by mutableStateOf(repo.seasons())
+    var seasons by mutableStateOf<List<SeasonCalendar>>(emptyList())
         private set
-    val circuits: Map<String, CircuitStats> = repo.circuits()
+    var circuits by mutableStateOf<Map<String, CircuitStats>>(emptyMap())
+        private set
 
     var fmt by mutableStateOf(Fmt(prefs.zone(), prefs.is24h(this.context)))
         private set
 
-    var standings by mutableStateOf(repo.cachedStandings())
+    var standings by mutableStateOf<Standings?>(null)
         private set
     var standingsLoading by mutableStateOf(false)
         private set
     var standingsError by mutableStateOf<String?>(null)
         private set
 
-    var news by mutableStateOf(repo.cachedNews().first)
+    var news by mutableStateOf<List<NewsItem>>(emptyList())
         private set
-    var newsAt by mutableLongStateOf(repo.cachedNews().second)
+    var newsAt by mutableLongStateOf(0L)
         private set
     var newsLoading by mutableStateOf(false)
         private set
@@ -226,7 +236,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
                 val now = System.currentTimeMillis()
                 val races = seasons.firstOrNull { it.year == season }?.races.orEmpty()
                 val over = races.isNotEmpty() && races.all { (it.raceSession?.end ?: 0L) < now }
-                val c = repo.driverCareer(driverId, season, over)
+                val c = repo.driverCareer(driverId, season, over, lastRaceEnd(season))
                 if (c != null) careers[driverId] = c else careerFailed[driverId] = true
             } catch (e: Exception) {
                 careerFailed[driverId] = true
@@ -244,7 +254,8 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         val k = "$circuitId-$driverId"
         if (trackRecords.containsKey(k) || !trackLoading.add(k)) return
         scope.launch {
-            try { repo.trackRecord(circuitId, driverId)?.let { trackRecords[k] = it } } catch (e: Exception) { }
+            val season = standings?.season
+            try { repo.trackRecord(circuitId, driverId, season?.let { lastRaceEnd(it) })?.let { trackRecords[k] = it } } catch (e: Exception) { }
             finally { trackLoading.remove(k) }
         }
     }
@@ -263,18 +274,28 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** Opens the compare panel for [a]; [b] is picked there. */
     var compare by mutableStateOf<Pair<app.f1pro.data.DriverStanding, app.f1pro.data.DriverStanding?>?>(null)
 
-    fun headshotUrl(family: String): String? = repo.headshotUrl(family)
-    suspend fun image(url: String): ByteArray? = repo.image(url)
+    /** Family name (normalised) → headshot URL, read with the rest of the saved data. */
+    private var headshots: Map<String, String> = emptyMap()
+
+    fun headshotUrl(family: String): String? = headshots[app.f1pro.data.Names.norm(family)]
 
     /** The calendar's race for a season and round (for flags and opening it). */
     fun raceFor(season: Int, round: Int): app.f1pro.data.Race? =
         seasons.firstOrNull { it.year == season }?.races?.firstOrNull { it.round == round && !it.isTesting }
+
+    /**
+     * The season Schedule shows instead of the current one, while a race from another season
+     * (opened from a driver panel between seasons) is open. Cleared when that race closes.
+     */
+    var scheduleYear by mutableStateOf<Int?>(null)
 
     /** From a driver panel: close it and open that round's race page. */
     fun openRace(season: Int, round: Int) {
         val key = raceFor(season, round)?.key ?: return
         sheetDriver = null
         sheetTeam = null
+        compare = null
+        if (app.f1pro.data.Planner.currentSeason(seasons, System.currentTimeMillis())?.year != season) scheduleYear = season
         tab = Tab.Schedule
         openRaceKey = key
     }
@@ -288,9 +309,23 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         seasons.firstOrNull { it.year == season }?.races
             ?.mapNotNull { r -> r.raceSession?.end?.takeIf { it < now } }?.maxOrNull()
 
+    /** When each season's driver data was downloaded (for "Updated 2 h ago" in the panels). */
+    val seasonDataAt = androidx.compose.runtime.mutableStateMapOf<Int, Long>()
+
+    /** Pull to refresh: download the season's driver data again now, whatever its age. */
+    fun refreshDriverData() {
+        val season = standings?.season ?: return
+        if (!seasonStatsLoading.add(season)) return
+        scope.launch {
+            try { repo.seasonStats(season, lastRaceEnd(season), force = true)?.let { publish(season, it) } } catch (e: Exception) { }
+            finally { seasonStatsLoading.remove(season) }
+        }
+    }
+
     /** Fills [driverSeasons] for every driver in the standings from one season download. */
     private fun publish(season: Int, stats: app.f1pro.data.DriverStats.SeasonStats) {
         seasonStats[season] = stats
+        if (stats.fetchedAt > 0) seasonDataAt[season] = stats.fetchedAt
         val st = standings ?: return
         if (st.season != season) return
         for (d in st.drivers) {
@@ -317,12 +352,54 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     }
 
     init {
-        repo.loadTeamColours()
         Haptics.enabled = prefs.haptics
-        UpdateWatch.load(this.context)
+        scope.launch {
+            // Everything saved on the phone, read in one go off the main thread.
+            val boot = withContext(Dispatchers.IO) {
+                repo.loadTeamColours()
+                UpdateWatch.load(context)
+                val n = repo.cachedNews()
+                Boot(repo.seasons(), repo.circuits(), repo.cachedStandings(), n.first, n.second, app.f1pro.CrashLog.read(context), repo.headshots())
+            }
+            seasons = boot.seasons
+            circuits = boot.circuits
+            standings = boot.standings
+            news = boot.news
+            newsAt = boot.newsAt
+            lastCrash = boot.crash
+            headshots = boot.headshots
+            ready = true
+            if (openWhenReady) { openWhenReady = false; onOpen() }
+            pendingAction?.let { pendingAction = null; it() }
+        }
+    }
+
+    private class Boot(
+        val seasons: List<SeasonCalendar>,
+        val circuits: Map<String, CircuitStats>,
+        val standings: Standings?,
+        val news: List<NewsItem>,
+        val newsAt: Long,
+        val crash: String?,
+        val headshots: Map<String, String>,
+    )
+
+    /** Something asked for before [ready] (a shortcut, the tile): run once data is loaded. */
+    private var pendingAction: (() -> Unit)? = null
+
+    fun whenReady(action: () -> Unit) {
+        if (ready) action() else pendingAction = action
+    }
+
+    /** The "Next race" shortcut / tile: the weekend under way, or else the next one. */
+    fun openNextRace() = whenReady {
+        val race = app.f1pro.data.Planner.weekend(seasons, System.currentTimeMillis())
+        tab = Tab.Schedule
+        if (race != null) openRaceKey = race.key
     }
 
     fun onOpen() {
+        if (!ready) { openWhenReady = true; return }
         fmt = Fmt(prefs.zone(), prefs.is24h(context))
         // Panels re-check their season data next time (cheap: the saved copy is used unless
         // a race has finished since).
@@ -339,6 +416,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             val before = app.f1pro.data.Teams.live
             repo.refreshTeamColours()
+            headshots = withContext(Dispatchers.IO) { repo.headshots() }
             if (app.f1pro.data.Teams.live != before) {
                 teamColoursVersion = System.currentTimeMillis()
                 withContext(Dispatchers.IO) { try { Widgets.updateAll(context) } catch (e: Exception) { } }
@@ -466,6 +544,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** Pull-to-refresh on the schedule: calendar, plus an update check like Afli. */
     fun refreshAll() {
         refreshCalendar()
+        refreshDriverData()
         seasonFor(System.currentTimeMillis())?.let { loadPodiums(it.year, force = true) }
         scope.launch { try { UpdateWatch.check(context, background = false, force = true) } catch (e: Exception) { } }
     }

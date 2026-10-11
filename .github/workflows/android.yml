@@ -98,6 +98,10 @@ jobs:
         if: failure()
         run: sed -n '41,50p' errors.txt | while IFS= read -r l; do echo "::error::${l}"; done
 
+      - name: Library versions in this build
+        continue-on-error: true
+        run: ./gradlew -q :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency io.coil-kt.coil3:coil-compose 2>/dev/null | head -3
+
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
 

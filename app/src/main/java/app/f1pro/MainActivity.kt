@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
     private var state: AppState? = null
     private var pendingRace: String? = null
     private var pendingTab: app.f1pro.ui.Tab? = null
+    private var pendingNext = false
 
     companion object {
         /** Launcher shortcuts and the quick settings tile. */
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
             state = s
             pendingRace?.let { s.openRaceKey = it; pendingRace = null }
             pendingTab?.let { s.tab = it; pendingTab = null }
+            if (pendingNext) { pendingNext = false; s.openNextRace() }
             if (UpdateWatch.openUpdates.value) s.tab = app.f1pro.ui.Tab.Settings
             // Theme: Dark, Light, or follow the phone. Set before anything reads the palette.
             val systemDark = isSystemInDarkTheme()
@@ -98,14 +100,8 @@ class MainActivity : ComponentActivity() {
             state?.tab = app.f1pro.ui.Tab.Settings
         }
         when (intent.action) {
-            ACTION_NEXT_RACE -> {
-                // The weekend under way, or else the next one, from the cached calendar.
-                val race = try {
-                    app.f1pro.data.Planner.weekend(app.f1pro.data.Repo(this).seasons(), System.currentTimeMillis())
-                } catch (e: Exception) { null }
-                if (race != null) intent.putExtra(Alerts.EXTRA_RACE, race.key)
-                else openTab(app.f1pro.ui.Tab.Schedule)
-            }
+            // The weekend under way, or else the next one (worked out once the calendar is loaded).
+            ACTION_NEXT_RACE -> state?.openNextRace() ?: run { pendingNext = true }
             ACTION_STANDINGS -> openTab(app.f1pro.ui.Tab.Standings)
             ACTION_NEWS -> openTab(app.f1pro.ui.Tab.News)
         }

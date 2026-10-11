@@ -74,7 +74,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun SchedulePage(state: AppState, listState: LazyListState) {
     val now = rememberNow(30_000)
-    val season = remember(state.seasons, now) { state.seasonFor(now) }
+    // Normally the current season; another one while a race from it is open (see scheduleYear).
+    val season = remember(state.seasons, now, state.scheduleYear) {
+        state.scheduleYear?.let { y -> state.seasons.firstOrNull { it.year == y } } ?: state.seasonFor(now)
+    }
     val races = season?.races.orEmpty()
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
 
@@ -99,6 +102,12 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     val sel = selected
     val open = sel != null && sel in races.indices
     androidx.compose.runtime.SideEffect { state.raceOpen = open }
+    // Back from a race of another season: Schedule returns to the current one.
+    var wasOpen by remember { mutableStateOf(open) }
+    LaunchedEffect(open) {
+        if (wasOpen && !open) state.scheduleYear = null
+        wasOpen = open
+    }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { state.raceOpen = false } }
 
     // The race the page is showing (it changes as you swipe between races): back shrinks into
@@ -436,19 +445,19 @@ fun RaceBar(label: String, canPrev: Boolean, canNext: Boolean, onBack: () -> Uni
             Text("Schedule", style = inter(13.sp, FontWeight.Medium, C.TextMuted))
         }
         Spacer(Modifier.weight(1f))
-        NavSquare(R.drawable.lc_chevron_left, enabled = canPrev, onClick = onPrev)
+        NavSquare(R.drawable.lc_chevron_left, "Previous race", enabled = canPrev, onClick = onPrev)
         Text(
             label,
             style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f),
             modifier = Modifier.widthIn(min = 44.dp).padding(horizontal = 6.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        NavSquare(R.drawable.lc_chevron_right, enabled = canNext, onClick = onNext)
+        NavSquare(R.drawable.lc_chevron_right, "Next race", enabled = canNext, onClick = onNext)
     }
 }
 
 @Composable
-private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
+private fun NavSquare(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .size(SectionRowHeight)
@@ -458,7 +467,7 @@ private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
             .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
             .tap(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Ic(icon, C.TextMuted, 18.dp) }
+    ) { Ic(icon, C.TextMuted, 18.dp, contentDescription = label) }
 }
 
 private fun trackType(type: String) = when (type) {
@@ -472,7 +481,9 @@ private fun trackType(type: String) = when (type) {
 private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shared: Boolean = false) {
     val context = LocalContext.current
     val fmt = LocalFmt.current
-    val now = rememberNow(1000)
+    // Statuses only change at session starts and ends: every 15 s is plenty. The countdown
+    // below ticks every second on its own, so the rest of the page doesn't redraw with it.
+    val now = rememberNow(15_000)
     val status = race.status(now)
     val stats = state.circuits[race.circuit.id]
     val live = race.liveSession(now)
@@ -553,17 +564,9 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
                     val color = if (isGlobalNext) sessionColor(next.name) else C.TextMuted
                     val border = if (isGlobalNext) color.copy(alpha = 0.25f) else C.BorderLight
                     val bg = if (isGlobalNext) color.copy(alpha = 0.06f) else null
-                    val cd = Fmt.countdown(next.start, now)
                     StatusBox(border, bg) {
                         Text("${next.name.uppercase()} STARTS IN", style = inter(11.sp, FontWeight.Medium, color, 0.2f))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            for ((v, l) in listOf(cd.days to "D", cd.hours to "H", cd.minutes to "M", cd.seconds to "S")) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    FlipText(v.toString().padStart(2, '0'), orbitron(24.sp, FontWeight.Bold, color))
-                                    Text(l, style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.1f), modifier = Modifier.padding(top = 4.dp))
-                                }
-                            }
-                        }
+                        CountdownDigits(next.start, color)
                     }
                 }
             }
@@ -743,4 +746,19 @@ private fun Stat(icon: Int, iconColor: Color, value: String, unit: String) {
 @Composable
 private fun Sep() {
     Text("  |  ", style = inter(11.sp, color = C.BorderLight))
+}
+
+/** D H M S to [start], ticking every second (only this redraws). */
+@Composable
+private fun CountdownDigits(start: Long, color: Color) {
+    val now = rememberNow(1000)
+    val cd = Fmt.countdown(start, now)
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        for ((v, l) in listOf(cd.days to "D", cd.hours to "H", cd.minutes to "M", cd.seconds to "S")) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                FlipText(v.toString().padStart(2, '0'), orbitron(24.sp, FontWeight.Bold, color))
+                Text(l, style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.1f), modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
 }

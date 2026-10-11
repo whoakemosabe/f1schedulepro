@@ -37,7 +37,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: shrinks and optimises the code and drops unused resources, for a smaller
+            // APK and faster start. Rules for our own code are in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (releaseKeystore.exists() && storePass != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -72,6 +76,9 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.4.0")
     // Liquid glass: Kyant's Backdrop, the same version Afli uses.
     implementation("io.github.kyant0:backdrop:2.0.1")
+    // Coil 3: photos (driver headshots) loaded off the main thread with memory + disk caches.
+    implementation("io.coil-kt.coil3:coil-compose:3.+")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.+")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")

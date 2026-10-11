@@ -36,6 +36,12 @@ fun F1App(state: AppState) {
     // Coming back to the app: re-read settings that may have changed, refresh stale data.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { state.onOpen() }
 
+    // Saved data is still being read (off the main thread): just the background for a moment.
+    if (!state.ready) {
+        Box(Modifier.fillMaxSize().background(C.Bg))
+        return
+    }
+
     // A reminder tap lands on the Schedule tab with that race open.
     LaunchedEffect(state.openRaceKey) {
         if (state.openRaceKey != null) state.tab = Tab.Schedule

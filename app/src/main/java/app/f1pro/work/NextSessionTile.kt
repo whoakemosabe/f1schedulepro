@@ -11,6 +11,7 @@ import app.f1pro.MainActivity
 import app.f1pro.R
 import app.f1pro.data.Planner
 import app.f1pro.data.Repo
+import kotlinx.coroutines.launch
 
 /**
  * Quick settings tile: the next session ("FP1 · United States GP") and how long until it
@@ -19,11 +20,27 @@ import app.f1pro.data.Repo
  */
 class NextSessionTile : TileService() {
 
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+
+    override fun onDestroy() {
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        super.onDestroy()
+    }
+
     override fun onStartListening() {
         super.onStartListening()
+        // Read the saved calendar off the main thread, then fill the tile in.
+        scope.launch {
+            val seasons = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try { Repo(this@NextSessionTile).seasons() } catch (e: Exception) { emptyList() }
+            }
+            show(seasons)
+        }
+    }
+
+    private fun show(seasons: List<app.f1pro.data.SeasonCalendar>) {
         val tile = qsTile ?: return
         val now = System.currentTimeMillis()
-        val seasons = try { Repo(this).seasons() } catch (e: Exception) { emptyList() }
         val live = Planner.live(seasons, now)
         val next = Planner.next(seasons, now)
         tile.icon = Icon.createWithResource(this, R.drawable.lc_flag)
