@@ -40,7 +40,7 @@ app/src/main/java/app/f1pro/
 app/src/main/assets/   bundled calendar, circuit stats, official names
 ```
 
-Unit tests cover the parsers, the calendar and the reminder timing (`./gradlew testReleaseUnitTest`). CI also runs a live check against every feed and adds the result to the release notes.
+Unit tests cover the parsers, the calendar and the reminder timing (`./gradlew testDebugUnitTest`). CI also runs a live check against every feed and adds the result to the release notes.
 
 ## History
 
