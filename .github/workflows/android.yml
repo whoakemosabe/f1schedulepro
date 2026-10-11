@@ -122,7 +122,8 @@ jobs:
           [ -f "$f" ] || f=build/live-check.md
           [ -f "$f" ] || { echo "::warning::No live check report"; exit 0; }
           grep '❌' "$f" | sed 's/^- ❌ //' | while IFS= read -r l; do echo "::error title=Live data::$l"; done
-          grep '✅\|⚠️' "$f" | sed 's/^- //' | while IFS= read -r l; do echo "::notice title=Live data::$l"; done
+          # The whole report as one notice (a run shows only 10 annotations of each kind).
+          echo "::notice title=Live data::$(grep '^- ' "$f" | sed 's/^- //' | sed ':a;N;$!ba;s/\n/%0A/g')"
 
       - name: Keep the APK with the run
         uses: actions/upload-artifact@v4
