@@ -387,46 +387,63 @@ private fun RaceDetailPager(
         if (pager.settledPage != lastPage) Haptics.segment(view)
         lastPage = pager.settledPage
     }
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding(), bottom = 12.dp)
-                .height(SectionRowHeight)
-                .enterStagger(0),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                Modifier
-                    .height(SectionRowHeight)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(C.SurfaceLight.copy(alpha = 0.5f))
-                    .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
-                    .tap(onClick = onBack)
-                    .padding(start = 8.dp, end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Ic(R.drawable.lc_chevron_left, C.TextMuted, 18.dp)
-                Spacer(Modifier.width(4.dp))
-                Text("Schedule", style = inter(13.sp, FontWeight.Medium, C.TextMuted))
-            }
-            Spacer(Modifier.weight(1f))
-            NavSquare(R.drawable.lc_chevron_left, enabled = pager.currentPage > 0) {
-                scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
-            }
-            Text(
-                races[pager.currentPage].label,
-                style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f),
-                modifier = Modifier.widthIn(min = 44.dp).padding(horizontal = 6.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    // The back / arrows bar lives in the frosted header (App draws it there), so the race
+    // page scrolls under it like it does under the header.
+    val back by androidx.compose.runtime.rememberUpdatedState(onBack)
+    androidx.compose.runtime.DisposableEffect(pager) {
+        val bar: @Composable () -> Unit = {
+            RaceBar(
+                label = races.getOrNull(pager.currentPage)?.label.orEmpty(),
+                canPrev = pager.currentPage > 0,
+                canNext = pager.currentPage < races.lastIndex,
+                onBack = { back() },
+                onPrev = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } },
+                onNext = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
             )
-            NavSquare(R.drawable.lc_chevron_right, enabled = pager.currentPage < races.lastIndex) {
-                scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-            }
         }
+        state.headerBar = bar
+        onDispose { if (state.headerBar === bar) state.headerBar = null }
+    }
+    Column(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
             RaceDetail(state, races[page], globalNextStart, shared = page == pager.currentPage)
         }
+    }
+}
+
+/** Back to Schedule, then the previous / next race arrows around the round number. */
+@Composable
+fun RaceBar(label: String, canPrev: Boolean, canNext: Boolean, onBack: () -> Unit, onPrev: () -> Unit, onNext: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+            .height(SectionRowHeight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier
+                .height(SectionRowHeight)
+                .clip(RoundedCornerShape(12.dp))
+                .background(C.SurfaceLight.copy(alpha = 0.5f))
+                .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+                .tap(onClick = onBack)
+                .padding(start = 8.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Ic(R.drawable.lc_chevron_left, C.TextMuted, 18.dp)
+            Spacer(Modifier.width(4.dp))
+            Text("Schedule", style = inter(13.sp, FontWeight.Medium, C.TextMuted))
+        }
+        Spacer(Modifier.weight(1f))
+        NavSquare(R.drawable.lc_chevron_left, enabled = canPrev, onClick = onPrev)
+        Text(
+            label,
+            style = orbitron(11.sp, FontWeight.SemiBold, C.TextMuted, 0.1f),
+            modifier = Modifier.widthIn(min = 44.dp).padding(horizontal = 6.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        NavSquare(R.drawable.lc_chevron_right, enabled = canNext, onClick = onNext)
     }
 }
 
@@ -476,7 +493,11 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp + LocalChrome.current.calculateBottomPadding()),
+            .padding(
+                start = 12.dp, end = 12.dp,
+                top = 12.dp + LocalChrome.current.calculateTopPadding(),
+                bottom = 12.dp + LocalChrome.current.calculateBottomPadding(),
+            ),
         verticalArrangement = Arrangement.spacedBy(PageGap),
     ) {
         // Hero

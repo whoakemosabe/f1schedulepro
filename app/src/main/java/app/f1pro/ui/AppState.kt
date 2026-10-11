@@ -78,6 +78,9 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** A race page is open on Schedule: its own swipe goes race to race, so tabs don't swipe. */
     var raceOpen by mutableStateOf(false)
 
+    /** An extra bar under the header, inside its frost (the race page's back / arrows bar). */
+    var headerBar by mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
+
     // Reminder settings mirrored as state so the Settings screen redraws.
     var alertsOn by mutableStateOf(prefs.alertsOn)
         private set

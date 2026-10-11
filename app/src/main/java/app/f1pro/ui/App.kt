@@ -101,7 +101,23 @@ fun F1App(state: AppState) {
                         .onSizeChanged { topPx = it.height }
                         .blockTouches()
                 ) {
-                    Box(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) { Header(state) }
+                    Column(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) {
+                        Header(state)
+                        // The race page's back / arrows bar, frosted with the header.
+                        val bar = state.headerBar
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = bar != null && state.tab == Tab.Schedule,
+                            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 80)) +
+                                androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(300)),
+                            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(160)) +
+                                androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(260)),
+                        ) {
+                            // Keep the last bar while it animates away.
+                            var last by remember { androidx.compose.runtime.mutableStateOf(bar) }
+                            if (bar != null) last = bar
+                            last?.invoke()
+                        }
+                    }
                     UpdateBanner()
                     CrashCard(state)
                 }
