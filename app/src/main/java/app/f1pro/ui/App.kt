@@ -128,6 +128,9 @@ fun F1App(state: AppState) {
                         .onSizeChanged { bottomPx = it.height },
                 )
             }
+
+            // Driver / team panels slide up over everything, header and tab bar included.
+            state.standings?.let { StandingsSheets(state, it) }
         }
     }
 }

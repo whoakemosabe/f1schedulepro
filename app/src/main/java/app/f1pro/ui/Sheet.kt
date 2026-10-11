@@ -1,0 +1,168 @@
+package app.f1pro.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+/**
+ * A panel that slides up from the bottom, closed by swiping down anywhere on it.
+ *
+ * One rule wherever the finger lands: a downward drag first scrolls the content back to its
+ * top, and only then pulls the panel down (the panel never moves while the content can still
+ * scroll). Let go past a quarter of its height, or flick down, and it closes; otherwise it
+ * springs back. Upward drags while it's pulled down push it back up before any scrolling.
+ * Tapping the dimmed page or pressing back also closes it.
+ */
+@Composable
+fun SlideSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val screenPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.92f).dp
+
+    var heightPx by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(screenPx) }
+    var job by remember { mutableStateOf<Job?>(null) }
+    var closing by remember { mutableStateOf(false) }
+
+    fun animateTo(target: Float, then: (() -> Unit)? = null, fast: Boolean = false) {
+        job?.cancel()
+        job = scope.launch {
+            animate(
+                offsetY, target,
+                animationSpec = if (fast) tween(200) else spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow),
+            ) { v, _ -> offsetY = v }
+            then?.invoke()
+        }
+    }
+
+    fun close() {
+        if (closing) return
+        closing = true
+        animateTo(maxOf(heightPx, 1f) + 40f, then = onDismiss, fast = true)
+    }
+
+    fun settle(velocity: Float) {
+        if (offsetY > heightPx * 0.25f || velocity > 1600f) close() else animateTo(0f)
+    }
+
+    fun dragBy(dy: Float) {
+        job?.cancel()
+        offsetY = (offsetY + dy).coerceAtLeast(0f)
+    }
+
+    // Slide in.
+    LaunchedEffect(Unit) { animateTo(0f) }
+    BackHandler { close() }
+
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Pulled down and dragging up: raise the panel before the content scrolls.
+                if (available.y < 0f && offsetY > 0f && source == NestedScrollSource.UserInput) {
+                    val used = maxOf(available.y, -offsetY)
+                    dragBy(used)
+                    return Offset(0f, used)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // Content is at its top and the finger keeps going down: pull the panel.
+                if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                    dragBy(available.y)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (offsetY > 0f) {
+                    settle(available.y)
+                    return available
+                }
+                return Velocity.Zero
+            }
+
+            // A fling that runs out at the top doesn't drag the panel down by itself.
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        val shown = if (heightPx > 0f) (1f - offsetY / heightPx).coerceIn(0f, 1f) else 0f
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f * shown))
+                .pointerInput(Unit) { detectTapGestures { close() } }
+        )
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .statusBarsPadding()
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .onSizeChanged { heightPx = it.height.toFloat() }
+                .offset { IntOffset(0, offsetY.roundToInt()) }
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(C.Surface)
+                .nestedScroll(connection)
+                .draggable(
+                    rememberDraggableState { dragBy(it) },
+                    Orientation.Vertical,
+                    onDragStopped = { v -> settle(v) },
+                ),
+        ) {
+            // Handle.
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 12.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(C.TextMuted.copy(alpha = 0.5f)))
+            }
+            content()
+        }
+    }
+}

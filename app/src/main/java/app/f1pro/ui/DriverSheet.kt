@@ -75,8 +75,9 @@ fun StandingsSheets(state: AppState, st: Standings) {
     val d = state.sheetDriver
     val t = state.sheetTeam
     when {
-        d != null -> Sheet(onDismiss = { state.sheetDriver = null }) { DriverPager(state, st, d) }
-        t != null -> Sheet(onDismiss = { state.sheetTeam = null }) {
+        // Keyed so switching from a team to one of its drivers slides a fresh panel up.
+        d != null -> androidx.compose.runtime.key("d-" + d.surname) { SlideSheet(onDismiss = { state.sheetDriver = null }) { DriverPager(state, st, d) } }
+        t != null -> androidx.compose.runtime.key("t-" + t.teamId) { SlideSheet(onDismiss = { state.sheetTeam = null }) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -85,19 +86,8 @@ fun StandingsSheets(state: AppState, st: Standings) {
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) { TeamPanel(state, st, t) }
-        }
+        } }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun Sheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = C.Surface,
-        content = content,
-    )
 }
 
 /** Swipe left / right for the next or previous driver in the standings. */
@@ -108,7 +98,7 @@ private fun DriverPager(state: AppState, st: Standings, first: DriverStanding) {
     val pager = rememberPagerState(initialPage = start) { drivers.size }
     val view = androidx.compose.ui.platform.LocalView.current
     LaunchedEffect(pager.settledPage) { if (pager.settledPage != start) Haptics.segment(view) }
-    Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("‹ swipe for other drivers ›", style = inter(10.sp, color = C.TextMuted))
             Spacer(Modifier.weight(1f))

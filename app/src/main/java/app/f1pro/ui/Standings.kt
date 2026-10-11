@@ -62,8 +62,6 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     var view by remember { mutableStateOf(state.prefs.standingsView) }
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val st = state.standings
-    // The driver / team panel (a sheet over everything, so where it sits here doesn't matter).
-    st?.let { StandingsSheets(state, it) }
     val fav = state.favourite
     state.teamColoursVersion // redraw when the official team colours arrive
     val now = rememberNow(60_000)
