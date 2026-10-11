@@ -211,6 +211,33 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     fun driverKey(season: Int, d: app.f1pro.data.DriverStanding) =
         "$season-" + app.f1pro.data.Names.norm(d.surname) + "-" + app.f1pro.data.Names.norm(d.name).take(6)
 
+    val careers = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.DriverCareer>()
+    private val careerLoading = HashSet<String>()
+
+    fun loadCareer(driverId: String, season: Int) {
+        if (careers.containsKey(driverId) || !careerLoading.add(driverId)) return
+        scope.launch {
+            try { repo.driverCareer(driverId, season)?.let { careers[driverId] = it } } catch (e: Exception) { }
+            finally { careerLoading.remove(driverId) }
+        }
+    }
+
+    fun headshotUrl(family: String): String? = repo.headshotUrl(family)
+    suspend fun image(url: String): ByteArray? = repo.image(url)
+
+    /** The calendar's race for a season and round (for flags and opening it). */
+    fun raceFor(season: Int, round: Int): app.f1pro.data.Race? =
+        seasons.firstOrNull { it.year == season }?.races?.firstOrNull { it.round == round && !it.isTesting }
+
+    /** From a driver panel: close it and open that round's race page. */
+    fun openRace(season: Int, round: Int) {
+        val key = raceFor(season, round)?.key ?: return
+        sheetDriver = null
+        sheetTeam = null
+        tab = Tab.Schedule
+        openRaceKey = key
+    }
+
     fun loadDriverSeason(season: Int, d: app.f1pro.data.DriverStanding) {
         val k = driverKey(season, d)
         if (driverSeasonLoading[k] == true || driverSeasons.containsKey(k)) return

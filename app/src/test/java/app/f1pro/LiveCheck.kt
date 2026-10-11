@@ -67,6 +67,19 @@ class LiveCheck {
                 )
                 line(season.rounds.isNotEmpty(), "Driver panel: ${lead.family} ${season.rounds.size} races, ${season.podiums} podiums, " +
                     "${season.rounds.count { it.quali != null }} quali, #${season.number ?: "?"}")
+                val sprint = app.f1pro.data.DriverStats.season(
+                    year, lead.id,
+                    Net.get("${Repo.JOLPICA}/$year/drivers/${lead.id}/results.json?limit=100"), null,
+                    Net.get("${Repo.JOLPICA}/$year/drivers/${lead.id}/sprint.json?limit=100"),
+                )
+                line(true, "Driver highlights: ${sprint.fastestLaps} fastest laps, ${sprint.sprintPoints.toInt()} sprint pts, " +
+                    "${sprint.placesGained} places gained, streak ${sprint.pointsStreak}")
+                val base = "${Repo.JOLPICA}/drivers/${lead.id}"
+                val wins = app.f1pro.data.DriverStats.total(Net.get("$base/results/1.json?limit=1"))
+                val starts = Net.get("$base/results.json?limit=1")
+                line(wins > 0, "Driver career: ${app.f1pro.data.DriverStats.total(starts)} starts, $wins wins, first ${app.f1pro.data.DriverStats.firstRace(starts)}")
+                val heads = app.f1pro.data.DriverStats.headshots(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
+                line(heads.size >= 15, "Headshots (OpenF1): ${heads.size} drivers")
             }
         } catch (e: Exception) { line(false, "Driver panel: ${e.message}") }
         try {

@@ -42,6 +42,33 @@ object Net {
         }
         throw IOException("Too many redirects")
     }
+
+    /** GET as bytes (images), up to [max] bytes. */
+    fun bytes(url: String, max: Int = 2_000_000): ByteArray {
+        var target = URL(url)
+        repeat(6) {
+            val c = target.openConnection() as HttpURLConnection
+            try {
+                c.instanceFollowRedirects = false
+                c.connectTimeout = 15_000
+                c.readTimeout = 20_000
+                c.setRequestProperty("User-Agent", "F1SchedulePro/2.0 (Android)")
+                val code = c.responseCode
+                if (code in 300..399) {
+                    val loc = c.getHeaderField("Location") ?: throw IOException("HTTP $code without a Location")
+                    target = URL(target, loc)
+                    return@repeat
+                }
+                if (code !in 200..299) throw IOException("HTTP $code")
+                val data = c.inputStream.use { it.readBytes() }
+                if (data.size > max) throw IOException("Too big")
+                return data
+            } finally {
+                c.disconnect()
+            }
+        }
+        throw IOException("Too many redirects")
+    }
 }
 
 data class NewsSource(val name: String, val url: String)
@@ -55,6 +82,7 @@ class Repo(context: Context) {
     private val dir = File(app.filesDir, "cache").apply { mkdirs() }
 
     companion object {
+        val entries = java.util.concurrent.ConcurrentHashMap<Int, Pair<Long, List<DriverStats.Entry>>>()
         const val JOLPICA = "https://api.jolpi.ca/ergast/f1"
         const val F1API = "https://f1api.dev/api/current"
         val NEWS = listOf(
@@ -234,6 +262,9 @@ class Repo(context: Context) {
 
     private fun driverFile(season: Int, key: String) = File(dir, "driver-$season-$key.json")
 
+    /** Season → (when, Jolpica driver ids), so swiping between drivers doesn't refetch it. */
+    private val entriesMemo get() = Companion.entries
+
     /**
      * A driver's season round by round, found by name. Cached for 3 hours (6 hours on a
      * failed refresh: the cached copy is still shown). Null when the season has no races yet.
@@ -243,22 +274,90 @@ class Repo(context: Context) {
         val f = driverFile(season, key)
         fun fromCache(): DriverSeason? = try {
             val o = JSONObject(f.readText())
-            DriverStats.season(season, o.getString("id"), o.getString("results"), o.optString("quali"))
+            DriverStats.season(season, o.getString("id"), o.getString("results"), o.optString("quali"), o.optString("sprint"))
         } catch (e: Exception) { null }
         if (!force && f.exists() && System.currentTimeMillis() - f.lastModified() < 3 * HOUR_MS) fromCache()?.let { return@withContext it }
         try {
-            val entries = DriverStats.entries(Net.get("$JOLPICA/$season/driverStandings.json", "application/json"))
+            val entries = entriesMemo[season]?.takeIf { System.currentTimeMillis() - it.first < HOUR_MS }?.second
+                ?: DriverStats.entries(Net.get("$JOLPICA/$season/driverStandings.json", "application/json"))
+                    .also { if (it.isNotEmpty()) entriesMemo[season] = System.currentTimeMillis() to it }
             val id = DriverStats.findId(entries, given, family) ?: return@withContext fromCache()
             coroutineScope {
                 val r = async { Net.get("$JOLPICA/$season/drivers/$id/results.json?limit=100", "application/json") }
                 val q = async { try { Net.get("$JOLPICA/$season/drivers/$id/qualifying.json?limit=100", "application/json") } catch (e: Exception) { "" } }
+                val sp = async { try { Net.get("$JOLPICA/$season/drivers/$id/sprint.json?limit=100", "application/json") } catch (e: Exception) { "" } }
                 val results = r.await()
                 val quali = q.await()
-                f.writeText(JSONObject().put("id", id).put("results", results).put("quali", quali).toString())
-                DriverStats.season(season, id, results, quali)
+                val sprint = sp.await()
+                f.writeText(JSONObject().put("id", id).put("results", results).put("quali", quali).put("sprint", sprint).toString())
+                DriverStats.season(season, id, results, quali, sprint)
             }
         } catch (e: Exception) {
             fromCache()
+        }
+    }
+
+    /**
+     * Career totals for a Jolpica driver id: a handful of small queries, one after another
+     * (Jolpica asks for no more than a few a second). Cached for a day.
+     */
+    suspend fun driverCareer(id: String, currentSeason: Int): DriverCareer? = withContext(Dispatchers.IO) {
+        val f = File(dir, "career-$id.json")
+        fun parse(o: JSONObject): DriverCareer {
+            val titles = DriverStats.titleSeasons(o.getString("titles")).filter { it < currentSeason }
+            return DriverCareer(
+                dateOfBirth = DriverStats.dateOfBirth(o.getString("driver")),
+                seasons = DriverStats.seasons(o.getString("seasons")),
+                firstRace = DriverStats.firstRace(o.getString("starts")),
+                starts = DriverStats.total(o.getString("starts")),
+                wins = DriverStats.total(o.getString("p1")),
+                podiums = DriverStats.total(o.getString("p1")) + DriverStats.total(o.getString("p2")) + DriverStats.total(o.getString("p3")),
+                poles = DriverStats.total(o.getString("poles")),
+                titles = titles,
+            )
+        }
+        val cached = try { JSONObject(f.readText()) } catch (e: Exception) { null }
+        if (cached != null && System.currentTimeMillis() - f.lastModified() < 24 * HOUR_MS) {
+            try { return@withContext parse(cached) } catch (e: Exception) { }
+        }
+        try {
+            val base = "$JOLPICA/drivers/$id"
+            val o = JSONObject()
+            for ((k, url) in listOf(
+                "driver" to "$base.json",
+                "seasons" to "$base/seasons.json?limit=100",
+                "starts" to "$base/results.json?limit=1",
+                "p1" to "$base/results/1.json?limit=1",
+                "p2" to "$base/results/2.json?limit=1",
+                "p3" to "$base/results/3.json?limit=1",
+                "poles" to "$base/qualifying/1.json?limit=1",
+                "titles" to "$base/driverStandings/1.json?limit=100",
+            )) {
+                o.put(k, Net.get(url, "application/json"))
+                kotlinx.coroutines.delay(260)
+            }
+            f.writeText(o.toString())
+            parse(o)
+        } catch (e: Exception) {
+            try { cached?.let { parse(it) } } catch (e2: Exception) { null }
+        }
+    }
+
+    /** The driver's official headshot URL (OpenF1, cached with the team colours). */
+    fun headshotUrl(family: String): String? = try {
+        DriverStats.headshots(JSONObject(teamColourFile.readText()).getString("raw"))[Names.norm(family)]
+    } catch (e: Exception) { null }
+
+    /** An image, cached on disk for a week. */
+    suspend fun image(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        val f = File(dir, "img-" + Integer.toHexString(url.hashCode()) + ".bin")
+        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 7 * 24 * HOUR_MS) {
+            return@withContext try { f.readBytes() } catch (e: Exception) { null }
+        }
+        try {
+            Net.bytes(url).also { f.writeBytes(it) }
+        } catch (e: Exception) {
+            if (f.exists()) try { f.readBytes() } catch (e2: Exception) { null } else null
         }
     }
 

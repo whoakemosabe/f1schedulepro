@@ -8,7 +8,8 @@ import org.junit.Test
 class DriverStatsTest {
     private fun results(id: String, rows: List<Triple<Int, String, String>>) = """
         {"MRData":{"RaceTable":{"Races":[${rows.joinToString(",") { (round, pos, text) ->
-            """{"round":"$round","raceName":"Race $round","Results":[{"position":"$pos","positionText":"$text","points":"${if (text == "1") 25 else 0}",
+            """{"round":"$round","raceName":"Race $round","Results":[{"position":"$pos","positionText":"$text","points":"${if (text == "1") 25 else if (text == "3") 15 else 0}","grid":"${round + 2}",
+               "FastestLap":{"rank":"${if (round == 3) 1 else 5}"},
                "status":"${if (text.toIntOrNull() != null) "Finished" else "Retired"}",
                "Driver":{"driverId":"$id","permanentNumber":"4","code":"NOR","givenName":"Lando","familyName":"Norris"}}]}"""
         }}]}}}
@@ -55,5 +56,36 @@ class DriverStatsTest {
         val e = DriverStats.entries(json)
         assertEquals("hulkenberg", DriverStats.findId(e, "Nico", "Hulkenberg"))
         assertEquals("antonelli", DriverStats.findId(e, "Kimi", "Antonelli").let { it ?: DriverStats.findId(e, "Andrea Kimi", "Antonelli") })
+    }
+
+    @Test
+    fun highlightsSprintsGapAndDuels() {
+        val sprint = """{"MRData":{"RaceTable":{"Races":[{"round":"3","SprintResults":[{"positionText":"2","points":"7"}]}]}}}"""
+        val a = DriverStats.season(2025, "a", results("a", listOf(Triple(1, "1", "1"), Triple(2, "18", "R"), Triple(3, "3", "3"))), quali(listOf(1 to 1, 3 to 4)), sprint)
+        assertEquals(1, a.poles)
+        assertEquals(1, a.fastestLaps)
+        assertEquals(7.0, a.sprintPoints, 0.0)
+        assertEquals(47.0, a.totalPoints, 0.0)
+        // grid = round + 2: R1 3→1 (+2), R3 5→3 (+2), R2 retired (not counted)
+        assertEquals(4, a.placesGained)
+        assertEquals(1, a.pointsStreak)
+        assertEquals(listOf(1 to 25.0, 2 to 25.0, 3 to 47.0), a.cumulative())
+
+        val b = DriverStats.season(2025, "b", results("b", listOf(Triple(1, "2", "2"), Triple(2, "4", "4"), Triple(3, "1", "1"))), quali(emptyList()))
+        // b: 0, 0, 25 → gap from a's view: b - a after each round
+        assertEquals(listOf(1 to -25.0, 2 to -25.0, 3 to -22.0), DriverStats.gap(a, b))
+        assertEquals(listOf(1, -1, -1), DriverStats.duels(a, b).map { it.winner })
+    }
+
+    @Test
+    fun careerAnswers() {
+        assertEquals(42, DriverStats.total("""{"MRData":{"total":"42"}}"""))
+        assertEquals(java.time.LocalDate.of(1999, 11, 13), DriverStats.dateOfBirth("""{"MRData":{"DriverTable":{"Drivers":[{"dateOfBirth":"1999-11-13"}]}}}"""))
+        assertEquals(listOf(2019, 2020), DriverStats.seasons("""{"MRData":{"SeasonTable":{"Seasons":[{"season":"2020"},{"season":"2019"}]}}}"""))
+        assertEquals("2019 Australian Grand Prix", DriverStats.firstRace("""{"MRData":{"RaceTable":{"Races":[{"season":"2019","raceName":"Australian Grand Prix"}]}}}"""))
+        assertEquals(listOf(2025), DriverStats.titleSeasons("""{"MRData":{"StandingsTable":{"StandingsLists":[{"season":"2025"}]}}}"""))
+        val h = DriverStats.headshots("""[{"last_name":"Hülkenberg","headshot_url":"https://media.formula1.com/x.png"},{"last_name":"Norris","headshot_url":null}]""")
+        assertEquals("https://media.formula1.com/x.png", h["hulkenberg"])
+        assertEquals(null, h["norris"])
     }
 }
