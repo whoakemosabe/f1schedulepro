@@ -1,6 +1,10 @@
 package app.f1pro.ui
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -66,6 +70,7 @@ import app.f1pro.data.Race
 import app.f1pro.data.RaceStatus
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun SchedulePage(state: AppState, listState: LazyListState) {
     val now = rememberNow(30_000)
@@ -95,13 +100,75 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     val open = sel != null && sel in races.indices
     androidx.compose.runtime.SideEffect { state.raceOpen = open }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { state.raceOpen = false } }
-    if (sel != null && open) {
-        // Only while Schedule is the tab showing: the pager may keep this page around off screen.
-        BackHandler(enabled = state.tab == Tab.Schedule) { selected = null }
-        RaceDetailPager(state, races, sel, globalNext?.session?.start, onBack = { selected = null })
-        return
+
+    // The race the page is showing (it changes as you swipe between races): back shrinks into
+    // that race's card, so the list is scrolled to it first if it's off screen.
+    var shownPage by rememberSaveable { mutableStateOf(sel ?: 0) }
+    fun prepareReturn() {
+        val key = races.getOrNull(shownPage)?.key ?: return
+        if (listState.layoutInfo.visibleItemsInfo.none { it.key == key }) {
+            listState.requestScrollToItem(maxOf(0, shownPage))
+        }
     }
 
+    // List ⇄ race page as one seekable transition, so the back gesture can scrub it.
+    val transitionState = remember { SeekableTransitionState(if (open) sel else null) }
+    LaunchedEffect(sel, open) {
+        val target = if (open) sel else null
+        if (transitionState.targetState != target || transitionState.currentState != target) transitionState.animateTo(target)
+    }
+    // Android 14+: the page shrinks toward its card as the back swipe moves, and springs back
+    // open if the swipe is let go early. Older phones get the same animation on back.
+    PredictiveBackHandler(enabled = open && state.tab == Tab.Schedule) { progress ->
+        prepareReturn()
+        try {
+            progress.collect { e -> transitionState.seekTo(e.progress, targetState = null) }
+            selected = null
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            transitionState.animateTo(transitionState.currentState)
+        }
+    }
+    val transition = rememberTransition(transitionState, label = "race")
+
+    SharedTransitionLayout {
+        CompositionLocalProvider(LocalSharedScope provides this) {
+            transition.AnimatedContent(
+                transitionSpec = { fadeIn(tween(320, delayMillis = 60)) togetherWith fadeOut(tween(220)) },
+                contentKey = { it != null },
+            ) { target ->
+                CompositionLocalProvider(LocalAnimScope provides this) {
+                    if (target != null && target in races.indices) {
+                        RaceDetailPager(
+                            state, races, target, globalNext?.session?.start,
+                            onPage = { shownPage = it },
+                            onBack = {
+                                prepareReturn()
+                                selected = null
+                            },
+                        )
+                    } else {
+                        ScheduleList(state, races, statuses, highlighted, listState, now) { i ->
+                            shownPage = i
+                            selected = i
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The season's races as cards. Tapping one opens its race page. */
+@Composable
+private fun ScheduleList(
+    state: AppState,
+    races: List<Race>,
+    statuses: List<RaceStatus>,
+    highlighted: Int,
+    listState: LazyListState,
+    now: Long,
+    onOpen: (Int) -> Unit,
+) {
     // Open on the current/next race instead of the top, once.
     var centered by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(highlighted, races.size) {
@@ -166,7 +233,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
                 podium = state.podiums[race.season]?.get(race.round),
                 now = now,
                 isNext = i == highlighted && status == RaceStatus.UPCOMING,
-                onClick = { selected = i },
+                onClick = { onOpen(i) },
             )
         }
     }
@@ -218,6 +285,7 @@ private fun RaceCard(
     Row(
         Modifier
             .fillMaxWidth()
+            .sharedRaceBounds(race.key)
             .alpha(if (status == RaceStatus.COMPLETED) (if (podium.isNullOrEmpty()) 0.45f else 0.6f) else 1f)
             .then(if (ring != null) Modifier.border(1.dp, ring, CardShape) else Modifier)
             .glassCard(edge)
@@ -225,7 +293,7 @@ private fun RaceCard(
             .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Flag(race.circuit.countryCode, 36.dp, 24.dp, 4.dp)
+        Box(Modifier.sharedRaceElement(race.key, "flag")) { Flag(race.circuit.countryCode, 36.dp, 24.dp, 4.dp) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -306,9 +374,11 @@ private fun RaceDetailPager(
     races: List<Race>,
     start: Int,
     globalNextStart: Long?,
+    onPage: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
     val pager = rememberPagerState(initialPage = start) { races.size }
+    LaunchedEffect(pager.currentPage) { onPage(pager.currentPage) }
     val scope = rememberCoroutineScope()
     val view = androidx.compose.ui.platform.LocalView.current
     // A tick each time a swipe lands on another race.
@@ -354,7 +424,7 @@ private fun RaceDetailPager(
             }
         }
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            RaceDetail(state, races[page], globalNextStart)
+            RaceDetail(state, races[page], globalNextStart, shared = page == pager.currentPage)
         }
     }
 }
@@ -381,7 +451,7 @@ private fun trackType(type: String) = when (type) {
 }
 
 @Composable
-private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
+private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shared: Boolean = false) {
     val context = LocalContext.current
     val fmt = LocalFmt.current
     val now = rememberNow(1000)
@@ -410,11 +480,11 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
     ) {
         // Hero
         Column(
-            Modifier.fillMaxWidth().glassCard(heroEdge).padding(16.dp),
+            Modifier.fillMaxWidth().sharedRaceBounds(race.key, shared).glassCard(heroEdge).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Flag(race.circuit.countryCode, 48.dp, 32.dp, 8.dp)
+                Box(Modifier.sharedRaceElement(race.key, "flag", shared)) { Flag(race.circuit.countryCode, 48.dp, 32.dp, 8.dp) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
