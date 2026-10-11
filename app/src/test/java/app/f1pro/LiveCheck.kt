@@ -61,6 +61,10 @@ class LiveCheck {
             )
             line(f.hours.size > 300 && f.days.size >= 14, "Weather (Austin): ${f.hours.size} hours, ${f.days.size} days")
         } catch (e: Exception) { line(false, "Weather: ${e.message}") }
+        try {
+            val c = app.f1pro.data.ResultParsers.teamColours(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
+            line(c.size >= 8, "Team colours (OpenF1): " + c.entries.sortedBy { it.key }.joinToString(" ") { "${it.key}=#%06X".format(it.value and 0xFFFFFF) })
+        } catch (e: Exception) { line(false, "Team colours: ${e.message}") }
         for (src in Repo.NEWS) {
             try {
                 val items = Parsers.rss(Net.get(src.url, "application/rss+xml, application/xml, text/xml"), src.name)

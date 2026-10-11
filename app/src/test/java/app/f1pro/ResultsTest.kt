@@ -176,3 +176,24 @@ class ResultsTest {
         assertNotNull(due)
     }
 }
+
+class TeamColourTest {
+    @Test
+    fun openF1TeamNamesMapToOurIds() {
+        val json = """[{"team_name":"Red Bull Racing","team_colour":"4781D7"},{"team_name":"Racing Bulls","team_colour":"6C98FF"},
+            {"team_name":"Audi","team_colour":"F50537"},{"team_name":"Cadillac","team_colour":"909090"},{"team_name":"Mercedes","team_colour":"00D7B6"},
+            {"team_name":"Haas F1 Team","team_colour":"9C9FA2"},{"team_name":"Kick Sauber","team_colour":"01C00E"},{"team_name":"Mystery","team_colour":"123456"},
+            {"team_name":"Ferrari","team_colour":"nothex"}]"""
+        val m = app.f1pro.data.ResultParsers.teamColours(json)
+        org.junit.Assert.assertEquals(0xFF4781D7L, m["red_bull"])
+        org.junit.Assert.assertEquals(0xFF6C98FFL, m["rb"])
+        org.junit.Assert.assertEquals(0xFFF50537L, m["audi"])
+        org.junit.Assert.assertEquals(0xFF01C00EL, m["sauber"])
+        org.junit.Assert.assertNull(m["ferrari"])
+        org.junit.Assert.assertEquals(7, m.size)
+        app.f1pro.data.Teams.live = m
+        org.junit.Assert.assertEquals(0xFF909090L, app.f1pro.data.Teams.color("cadillac"))
+        org.junit.Assert.assertEquals(0xFFE8002DL, app.f1pro.data.Teams.color("ferrari")) // falls back
+        app.f1pro.data.Teams.live = emptyMap()
+    }
+}

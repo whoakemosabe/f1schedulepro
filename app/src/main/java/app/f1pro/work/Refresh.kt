@@ -17,6 +17,7 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         val repo = Repo(applicationContext)
         try { repo.refreshCalendar() } catch (e: Exception) { }
         try { repo.fetchStandings() } catch (e: Exception) { }
+        try { repo.refreshTeamColours() } catch (e: Exception) { }
         try { Ticker.tick(applicationContext) } catch (e: Exception) { }
         try { UpdateWatch.checkAndNotify(applicationContext) } catch (e: Exception) { }
         return Result.success()

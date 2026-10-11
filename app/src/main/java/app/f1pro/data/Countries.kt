@@ -52,7 +52,30 @@ object Teams {
         "audi" to "audi", "cadillac" to "cadillac",
     )
 
-    fun color(teamId: String): Long = COLORS[teamId] ?: 0xFF4DB8FF
+    /** Official broadcast colours from OpenF1, when fetched; they win over the built-in ones. */
+    @Volatile var live: Map<String, Long> = emptyMap()
+
+    fun color(teamId: String): Long = live[teamId] ?: COLORS[teamId] ?: 0xFF4DB8FF
+
+    /** OpenF1's team names → our team ids ("Racing Bulls" before "Red Bull": both have "bull"). */
+    fun idFor(teamName: String): String? {
+        val n = teamName.lowercase()
+        return when {
+            "racing bulls" in n || n == "rb" || "visa" in n || "alphatauri" in n -> "rb"
+            "red bull" in n -> "red_bull"
+            "mercedes" in n -> "mercedes"
+            "ferrari" in n -> "ferrari"
+            "mclaren" in n -> "mclaren"
+            "aston" in n -> "aston_martin"
+            "alpine" in n -> "alpine"
+            "williams" in n -> "williams"
+            "haas" in n -> "haas"
+            "audi" in n -> "audi"
+            "sauber" in n || "kick" in n -> "sauber"
+            "cadillac" in n -> "cadillac"
+            else -> null
+        }
+    }
 
     fun url(teamId: String): String? = SLUGS[teamId]?.let { "https://www.formula1.com/en/teams/$it" }
 

@@ -66,7 +66,6 @@ import app.f1pro.data.Race
 import app.f1pro.data.RaceStatus
 import kotlinx.coroutines.launch
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulePage(state: AppState, listState: LazyListState) {
     val now = rememberNow(30_000)
@@ -90,6 +89,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     }
     val globalNext = remember(state.seasons, now) { Planner.next(state.seasons, now) }
     LaunchedEffect(season?.year) { season?.year?.let { state.loadPodiums(it) } }
+    state.teamColoursVersion // redraw podium stripes when the official team colours arrive
 
     val sel = selected
     if (sel != null && sel in races.indices) {
@@ -108,7 +108,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
     }
 
     if (races.isEmpty()) {
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxSize().padding(pagePadding(24.dp, 24.dp, 24.dp)), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Text("No calendar yet", style = inter(15.sp, FontWeight.SemiBold))
             Text("Connect to the internet to load the season.", style = inter(13.sp, color = C.TextSecondary))
         }
@@ -123,19 +123,18 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
             pulled = false
         }
     }
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+    RefreshBox(
         isRefreshing = state.calendarLoading && pulled,
         onRefresh = {
             Haptics.settle(view)
             pulled = true
             state.refreshAll()
         },
-        modifier = Modifier.fillMaxSize(),
     ) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        contentPadding = pagePadding(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
@@ -151,7 +150,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
                 Legend(C.Highlight, "NEXT")
                 Spacer(Modifier.weight(1f))
                 val count = races.count { !it.isTesting }
-                Text("$count races", style = inter(11.sp, FontWeight.Medium, C.TextMuted.copy(alpha = 0.5f), 0.05f))
+                Text("$count races", style = inter(11.sp, FontWeight.Medium, C.TextMuted, 0.05f))
             }
         }
         itemsIndexed(races, key = { _, r -> r.key }) { i, race ->
@@ -316,15 +315,13 @@ private fun RaceDetailPager(
     }
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp + LocalChrome.current.calculateTopPadding()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 Modifier
                     .heightIn(min = 40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(C.SurfaceLight.copy(alpha = 0.5f))
-                    .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+                    .glassButton(RoundedCornerShape(50))
                     .tap(onClick = onBack)
                     .padding(start = 8.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -358,10 +355,8 @@ private fun NavSquare(icon: Int, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .size(40.dp)
-            .alpha(if (enabled) 1f else 0.2f)
-            .clip(RoundedCornerShape(12.dp))
-            .background(C.SurfaceLight.copy(alpha = 0.5f))
-            .border(1.dp, C.GlassBorder, RoundedCornerShape(12.dp))
+            .alpha(if (enabled) 1f else 0.3f)
+            .glassButton(RoundedCornerShape(50))
             .tap(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Ic(icon, C.TextMuted, 18.dp) }
@@ -399,7 +394,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 16.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 16.dp + LocalChrome.current.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Hero
@@ -487,7 +482,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                         Spacer(Modifier.width(6.dp))
                         Text("Lap record", style = inter(11.sp, color = C.TextSecondary))
                         Spacer(Modifier.weight(1f))
-                        Text(lr.time, style = orbitron(11.sp, FontWeight.Bold, C.Accent))
+                        Text(lr.time, style = orbitron(11.sp, FontWeight.Bold, C.AccentText))
                         Text("  |  ", style = inter(11.sp, color = C.TextMuted.copy(alpha = 0.4f)))
                         Row(
                             Modifier.tap { openUrl(context, lr.driverUrl) },
@@ -563,7 +558,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                     when {
                         isLive -> LiveDot(10.dp)
                         isPast -> Ic(R.drawable.lc_check, C.Success, 14.dp)
-                        s.name == "Race" -> Ic(R.drawable.lc_flag, C.Accent, 14.dp)
+                        s.name == "Race" -> Ic(R.drawable.lc_flag, C.AccentText, 14.dp)
                         s.name.contains("Sprint") -> Ic(R.drawable.lc_zap, C.Warning, 14.dp)
                         s.name == "Qualifying" -> Ic(R.drawable.lc_crosshair, C.Highlight, 14.dp)
                         else -> Ic(R.drawable.lc_circle_dot, C.Highlight.copy(alpha = 0.5f), 14.dp)

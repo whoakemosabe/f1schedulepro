@@ -63,6 +63,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val st = state.standings
     val fav = state.favourite
+    state.teamColoursVersion // redraw when the official team colours arrive
     val now = rememberNow(60_000)
     val calendarYear = remember(state.seasons, now) { state.seasonFor(now)?.year }
     val hv = androidx.compose.ui.platform.LocalView.current
@@ -74,19 +75,18 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
         }
     }
 
-    PullToRefreshBox(
+    RefreshBox(
         isRefreshing = state.standingsLoading && st != null,
         onRefresh = {
             Haptics.settle(hv)
             pulled = true
             state.loadStandings()
         },
-        modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = pagePadding(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (st != null && calendarYear != null && st.season in 1 until calendarYear) {
@@ -140,9 +140,9 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                         Ic(R.drawable.lc_circle_alert, C.Live, 28.dp)
                         Text(state.standingsError ?: "Failed to load standings", style = inter(14.sp, color = C.TextSecondary), textAlign = TextAlign.Center)
                         Row(Modifier.tap { state.loadStandings() }, verticalAlignment = Alignment.CenterVertically) {
-                            Ic(R.drawable.lc_refresh_cw, C.Accent, 12.dp)
+                            Ic(R.drawable.lc_refresh_cw, C.AccentText, 12.dp)
                             Spacer(Modifier.width(6.dp))
-                            Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.Accent))
+                            Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.AccentText))
                         }
                     }
                 }
@@ -163,7 +163,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 item {
                     Text(
                         "Updated ${Fmt.ago(st.fetchedAt, System.currentTimeMillis())} · pull down to refresh",
-                        style = inter(11.sp, color = C.TextMuted.copy(alpha = 0.6f)),
+                        style = inter(11.sp, color = C.TextMuted),
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -198,7 +198,7 @@ private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (
                 Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
             }
             Row(Modifier.tap { Teams.url(d.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
-                Text(d.teamName.uppercase(), style = inter(11.sp, FontWeight.Medium, color, 0.05f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(d.teamName.uppercase(), style = inter(11.sp, FontWeight.Medium, readable(color), 0.05f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(4.dp))
                 Ic(R.drawable.lc_external_link, C.TextMuted, 8.dp)
             }
@@ -232,7 +232,7 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
             Text(t.position.toString(), style = orbitron(15.sp, FontWeight.Bold, C.TextMuted))
             Spacer(Modifier.width(10.dp))
             Row(Modifier.weight(1f).tap { Teams.url(t.teamId)?.let(open) }, verticalAlignment = Alignment.CenterVertically) {
-                Text(t.teamName.uppercase(), style = inter(14.sp, FontWeight.Bold, color, 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(t.teamName.uppercase(), style = inter(14.sp, FontWeight.Bold, readable(color), 0.03f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(4.dp))
                 Ic(R.drawable.lc_external_link, C.TextMuted, 10.dp)
             }
@@ -291,7 +291,7 @@ private fun FavouriteCard(
                 }
                 "${Teams.shortName(row.teamName)} · P${row.position} · ${Fmt.points(row.points)} pts$gap"
             }
-            Text(line, style = inter(12.sp, FontWeight.Medium, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(line, style = inter(12.sp, FontWeight.Medium, readable(color)), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
         Chip("Change", onClick = onChange)

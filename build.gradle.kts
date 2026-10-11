@@ -1,5 +1,6 @@
+// AGP 9 compiles Kotlin itself (built-in Kotlin), so only the Compose compiler plugin is added.
+// Same toolchain as Afli.
 plugins {
-    id("com.android.application") version "8.13.2" apply false
-    id("org.jetbrains.kotlin.android") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.2.21" apply false
+    id("com.android.application") version "9.4.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.21" apply false
 }

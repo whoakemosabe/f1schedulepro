@@ -6,6 +6,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -64,7 +69,6 @@ fun Header(state: AppState) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(C.Bar)
             .statusBarsPadding()
     ) {
         Row(
@@ -149,62 +153,73 @@ fun Header(state: AppState) {
                 }
             }
         }
-        FadeLine(C.Accent.copy(alpha = 0.5f))
     }
 }
 
 @Composable
-fun BottomNav(state: AppState) {
+fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
     val tabs = Tab.entries
     val view = androidx.compose.ui.platform.LocalView.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(C.Bar)
+    val backdrop = LocalPageBackdrop.current
+    val shape = RoundedCornerShape(50)
+    // Pressing a tab squishes the capsule a little and deepens its lens, like Afli's bar.
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val press by animateFloatAsState(if (pressed) 1f else 0f, spring(stiffness = Spring.StiffnessMediumLow), label = "press")
+    BoxWithConstraints(
+        modifier
             .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .height(64.dp)
+            .graphicsLayer {
+                scaleX = 1f - 0.02f * press
+                scaleY = 1f - 0.03f * press
+            }
+            .then(if (backdrop != null) Modifier.glassControl(backdrop, shape, press = { press }) else Modifier.background(C.Bar, shape))
+            .border(1.dp, Rim, shape),
     ) {
-        FadeLine(C.Accent.copy(alpha = 0.5f))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val tabW = maxWidth / tabs.size
-            val idx = tabs.indexOf(state.tab)
-            // The PWA's bouncy sliding indicator.
-            val x by animateDpAsState(
-                tabW * idx + tabW * 0.15f,
-                spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
-                label = "indicator",
-            )
-            Row(Modifier.fillMaxWidth()) {
-                for (t in tabs) {
-                    val active = t == state.tab
-                    val s by animateFloatAsState(if (active) 1.1f else 1f, tween(200), label = "s")
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .clickable(remember { MutableInteractionSource() }, indication = null) {
-                                if (t != state.tab) Haptics.segment(view) else Haptics.tap(view)
-                                state.tab = t
-                            }
-                            .padding(top = 12.dp, bottom = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Ic(t.icon, if (active) C.Accent else C.TextMuted, 22.dp, Modifier.scale(s))
-                        Text(
-                            t.title.uppercase(),
-                            style = inter(11.sp, FontWeight.SemiBold, if (active) C.Accent else C.TextMuted.copy(alpha = 0.6f), 0.05f),
-                        )
-                    }
+        val tabW = maxWidth / tabs.size
+        val idx = tabs.indexOf(state.tab)
+        // The PWA's bouncy indicator, now a red glass pill that springs to the chosen tab.
+        val x by animateDpAsState(
+            tabW * idx,
+            spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+            label = "indicator",
+        )
+        Box(
+            Modifier
+                .offset(x = x)
+                .width(tabW)
+                .fillMaxHeight()
+                .padding(5.dp)
+                .clip(shape)
+                .background(Brush.verticalGradient(listOf(C.Accent.copy(alpha = 0.32f), C.Accent.copy(alpha = 0.14f))))
+                .border(1.dp, Brush.verticalGradient(listOf(C.AccentGlow.copy(alpha = 0.85f), C.Accent.copy(alpha = 0.3f))), shape)
+        )
+        Row(Modifier.fillMaxSize()) {
+            for (t in tabs) {
+                val active = t == state.tab
+                val s by animateFloatAsState(if (active) 1.08f else 1f, tween(200), label = "s")
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(source, indication = null) {
+                            if (t != state.tab) Haptics.segment(view) else Haptics.tap(view)
+                            state.tab = t
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                ) {
+                    Ic(t.icon, if (active) C.AccentText else C.TextSecondary, 22.dp, Modifier.scale(s))
+                    Text(
+                        t.title.uppercase(),
+                        style = inter(10.sp, FontWeight.SemiBold, if (active) C.AccentText else C.TextSecondary, 0.05f),
+                        maxLines = 1,
+                    )
                 }
             }
-            Box(
-                Modifier
-                    .offset(x = x)
-                    .width(tabW * 0.7f)
-                    .height(3.dp)
-                    .shadow(8.dp, RoundedCornerShape(50), ambientColor = C.Accent, spotColor = C.Accent)
-                    .clip(RoundedCornerShape(50))
-                    .background(C.Accent)
-            )
         }
     }
 }
@@ -234,14 +249,13 @@ fun UpdateBanner() {
             Modifier
                 .fillMaxWidth()
                 .padding(start = 12.dp, end = 12.dp, top = 10.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                        listOf(C.Accent.copy(alpha = 0.16f), C.Highlight.copy(alpha = 0.10f))
-                    )
+                .then(
+                    LocalPageBackdrop.current?.let { Modifier.glassFloat(it, RoundedCornerShape(16.dp)) }
+                        ?: Modifier.clip(RoundedCornerShape(16.dp)).background(C.Card)
                 )
-                .background(C.Card.copy(alpha = 0.55f))
-                .then(Modifier.border(1.dp, C.Accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp)))
+                .clip(RoundedCornerShape(16.dp))
+                .background(Brush.horizontalGradient(listOf(C.Accent.copy(alpha = 0.14f), C.Highlight.copy(alpha = 0.08f))))
+                .border(1.dp, C.Accent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                 .tap {
                     scope.launch {
                         val ok = app.f1pro.work.UpdateWatch.tap(context)
@@ -300,9 +314,11 @@ fun CrashCard(state: AppState) {
         Modifier
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 10.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(C.Card)
-            .border(1.dp, C.Live.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+            .then(
+                LocalPageBackdrop.current?.let { Modifier.glassFloat(it, RoundedCornerShape(16.dp)) }
+                    ?: Modifier.clip(RoundedCornerShape(16.dp)).background(C.Card)
+            )
+            .border(1.dp, C.Live.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

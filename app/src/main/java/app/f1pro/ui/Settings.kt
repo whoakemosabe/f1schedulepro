@@ -179,7 +179,7 @@ fun SettingsPage(state: AppState) {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).padding(12.dp),
+        Modifier.fillMaxSize().verticalScroll(scroll).padding(pagePadding()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // ── Appearance ──
@@ -212,7 +212,7 @@ fun SettingsPage(state: AppState) {
                 ) {
                     val label = if (state.timezone.isBlank()) "Phone's time zone" else ZONES.firstOrNull { it.first == state.timezone }?.second ?: state.timezone
                     Text(label, style = inter(14.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f))
-                    Text(fmt.abbr(), style = inter(11.sp, FontWeight.Medium, C.Accent))
+                    Text(fmt.abbr(), style = inter(11.sp, FontWeight.Medium, C.AccentText))
                     Spacer(Modifier.width(8.dp))
                     Ic(R.drawable.lc_chevron_down, C.TextMuted, 14.dp)
                 }
@@ -228,7 +228,7 @@ fun SettingsPage(state: AppState) {
                         DropdownMenuItem(
                             text = {
                                 Column {
-                                    Text(label, style = inter(14.sp, FontWeight.Medium, if (active) C.Accent else C.Text))
+                                    Text(label, style = inter(14.sp, FontWeight.Medium, if (active) C.AccentText else C.Text))
                                     Text(if (id.isBlank()) java.time.ZoneId.systemDefault().id else id, style = inter(11.sp, color = C.TextMuted))
                                 }
                             },
@@ -236,11 +236,11 @@ fun SettingsPage(state: AppState) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         if (id.isBlank()) Fmt.zoneLabel(java.time.ZoneId.systemDefault().id) else Fmt.zoneLabel(id),
-                                        style = inter(11.sp, color = if (active) C.Accent else C.TextSecondary),
+                                        style = inter(11.sp, color = if (active) C.AccentText else C.TextSecondary),
                                     )
                                     if (active) {
                                         Spacer(Modifier.width(6.dp))
-                                        Ic(R.drawable.lc_check, C.Accent, 14.dp)
+                                        Ic(R.drawable.lc_check, C.AccentText, 14.dp)
                                     }
                                 }
                             },
@@ -335,7 +335,7 @@ fun SettingsPage(state: AppState) {
 
         // ── About ──
         SettingsCard("About", R.drawable.lc_info, trailing = {
-            Text("v" + Updater.installedVersion(context), style = inter(10.sp, color = C.TextMuted.copy(alpha = 0.6f), tracking = 0.05f))
+            Text("v" + Updater.installedVersion(context), style = inter(10.sp, color = C.TextMuted, tracking = 0.05f))
         }) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("F1 Schedule Pro", style = inter(14.sp, FontWeight.SemiBold))
@@ -503,7 +503,7 @@ private fun FavouriteSettings(state: AppState) {
                 modifier = Modifier.heightIn(max = 420.dp),
             ) {
                 DropdownMenuItem(
-                    text = { Text("No favourite", style = inter(14.sp, FontWeight.Medium, if (fav == null) C.Accent else C.Text)) },
+                    text = { Text("No favourite", style = inter(14.sp, FontWeight.Medium, if (fav == null) C.AccentText else C.Text)) },
                     onClick = {
                         if (fav != null) Haptics.segment(view)
                         state.chooseFavourite(null)
@@ -524,11 +524,11 @@ private fun FavouriteSettings(state: AppState) {
                         },
                         text = {
                             Column {
-                                Text("${d.name} ${d.surname}", style = inter(14.sp, FontWeight.Medium, if (active) C.Accent else C.Text))
+                                Text("${d.name} ${d.surname}", style = inter(14.sp, FontWeight.Medium, if (active) C.AccentText else C.Text))
                                 Text(app.f1pro.data.Teams.shortName(d.teamName) + " · P${d.position}", style = inter(11.sp, color = C.TextMuted))
                             }
                         },
-                        trailingIcon = { if (active) Ic(R.drawable.lc_check, C.Accent, 14.dp) },
+                        trailingIcon = { if (active) Ic(R.drawable.lc_check, C.AccentText, 14.dp) },
                         onClick = {
                             if (!active) Haptics.segment(view)
                             state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))

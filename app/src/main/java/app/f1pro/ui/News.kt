@@ -62,17 +62,17 @@ private data class QuickLink(val label: String, val url: String, val icon: Int, 
 private val QUICK_LINKS get() = listOf(
     QuickLink("F1 TV", "https://f1tv.formula1.com", R.drawable.lc_tv, C.Highlight),
     QuickLink("YouTube", "https://www.youtube.com/F1", R.drawable.lc_circle_play, C.Live),
-    QuickLink("Motorsport", "https://www.motorsport.com/f1/", R.drawable.lc_newspaper, C.Accent),
+    QuickLink("Motorsport", "https://www.motorsport.com/f1/", R.drawable.lc_newspaper, C.AccentText),
     QuickLink("Reddit", "https://www.reddit.com/r/formula1/", R.drawable.lc_message_circle, C.Warning),
     QuickLink("Calendar", "https://f1calendar.com", R.drawable.lc_calendar, C.Success),
     QuickLink("FIA Rules", "https://www.fia.com/regulation/category/110", R.drawable.lc_bookmark, C.TextMuted),
 )
 
 private val SOURCE_COLORS get() = mapOf(
-    "RACER" to C.Highlight.copy(alpha = 0.6f),
-    "Autosport" to C.Warning.copy(alpha = 0.6f),
-    "Motorsport" to C.Success.copy(alpha = 0.6f),
-    "The Race" to C.Accent.copy(alpha = 0.6f),
+    "RACER" to C.Highlight,
+    "Autosport" to C.Warning,
+    "Motorsport" to C.Success,
+    "The Race" to C.AccentText,
 )
 
 private val SORT_LABELS = mapOf("newest" to "Newest", "oldest" to "Oldest", "source" to "Source")
@@ -104,18 +104,17 @@ fun NewsPage(state: AppState, listState: LazyListState) {
     val refreshing = state.newsLoading && state.news.isNotEmpty()
 
     Box(Modifier.fillMaxSize()) {
-        PullToRefreshBox(
+        RefreshBox(
             isRefreshing = refreshing,
             onRefresh = {
                 Haptics.settle(view)
                 state.loadNews(manual = true)
             },
-            modifier = Modifier.fillMaxSize(),
         ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = pagePadding(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
@@ -130,7 +129,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                         Text("LATEST NEWS", style = SectionLabel)
                         if (items.isNotEmpty()) {
                             Spacer(Modifier.width(8.dp))
-                            Text("${items.size} articles", style = inter(10.sp, color = C.TextMuted.copy(alpha = 0.6f)))
+                            Text("${items.size} articles", style = inter(10.sp, color = C.TextMuted))
                         }
                         Spacer(Modifier.weight(1f))
                         Box {
@@ -154,7 +153,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                             ) {
                                 for ((k, label) in SORT_LABELS) {
                                     DropdownMenuItem(
-                                        text = { Text(label, style = inter(12.sp, FontWeight.Medium, if (k == sort) C.Accent else C.Text)) },
+                                        text = { Text(label, style = inter(12.sp, FontWeight.Medium, if (k == sort) C.AccentText else C.Text)) },
                                         onClick = {
                                             if (k != sort) Haptics.segment(view)
                                             sort = k
@@ -178,7 +177,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                                 .tap(enabled = !state.newsLoading) { state.loadNews(manual = true) },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Ic(R.drawable.lc_refresh_cw, if (state.newsLoading) C.Accent else C.TextMuted, 14.dp, Modifier.rotate(spin))
+                            Ic(R.drawable.lc_refresh_cw, if (state.newsLoading) C.AccentText else C.TextMuted, 14.dp, Modifier.rotate(spin))
                         }
                     }
                 }
@@ -195,9 +194,9 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                             Ic(R.drawable.lc_circle_alert, C.Live, 28.dp)
                             Text(state.newsError ?: "Failed to load news", style = inter(14.sp, color = C.TextSecondary), textAlign = TextAlign.Center)
                             Row(Modifier.tap { state.loadNews(manual = true) }, verticalAlignment = Alignment.CenterVertically) {
-                                Ic(R.drawable.lc_refresh_cw, C.Accent, 12.dp)
+                                Ic(R.drawable.lc_refresh_cw, C.AccentText, 12.dp)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.Accent))
+                                Text("Retry", style = inter(12.sp, FontWeight.SemiBold, C.AccentText))
                             }
                         }
                     }
@@ -213,7 +212,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                                 .padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (featured) Text("LATEST", style = inter(10.sp, FontWeight.Bold, C.Accent, 0.1f))
+                            if (featured) Text("LATEST", style = inter(10.sp, FontWeight.Bold, C.AccentText, 0.1f))
                             Text(
                                 n.title,
                                 style = inter(if (featured) 15.sp else 14.sp, FontWeight.SemiBold, C.Text).copy(lineHeight = if (featured) 20.sp else 19.sp),
@@ -250,7 +249,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
             visible = toast != null,
             enter = fadeIn() + slideInVertically { -it / 2 },
             exit = fadeOut() + slideOutVertically { -it / 2 },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp + LocalChrome.current.calculateTopPadding()),
         ) {
             val ok = toast != false
             val color = if (ok) C.Success else C.Live

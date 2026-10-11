@@ -28,26 +28,63 @@ object C {
 
     private fun pick(d: Long, l: Long) = Color(if (dark) d else l)
 
-    val Bg get() = pick(0xFF0C0F1A, 0xFFF2F4FA)
+    // Every text colour clears 4.5:1 on cards in both themes (checked with the WCAG formula).
+    val Bg get() = pick(0xFF0C0F1A, 0xFFECEFF6)
     val Surface get() = pick(0xFF131830, 0xFFFFFFFF)
-    val SurfaceLight get() = pick(0xFF1A2040, 0xFFE8EBF4)
+    val SurfaceLight get() = pick(0xFF1A2040, 0xFFE6E9F2)
     val SurfaceLighter get() = pick(0xFF222850, 0xFFDDE1EE)
     val Border get() = pick(0xFF252D55, 0xFFD3D8E8)
     val BorderLight get() = pick(0xFF303A6A, 0xFFC0C7DC)
+
+    /** F1 red for fills: pills, tiles, bars, the tab indicator. */
     val Accent get() = Color(0xFFE10600)
     val AccentGlow get() = Color(0xFFFF2D2D)
-    val Highlight get() = pick(0xFF00D4FF, 0xFF0088B0)
+
+    /** F1 red when it's text or a thin icon (the fill red is too dark to read on navy). */
+    val AccentText get() = pick(0xFFFF4A44, 0xFFC40500)
+
+    /** Something on track right now: brighter than the brand red so it stands apart. */
+    val Live get() = pick(0xFFFF453A, 0xFFD70015)
+
+    val Highlight get() = pick(0xFF00D4FF, 0xFF006E8F)
     val Text get() = pick(0xFFF0F2FF, 0xFF0C0F1A)
     val TextSecondary get() = pick(0xFFA0A8C8, 0xFF434B6B)
-    val TextMuted get() = pick(0xFF6670A0, 0xFF767E9F)
-    val Success get() = pick(0xFF00E676, 0xFF00994C)
-    val Warning get() = pick(0xFFFFAB00, 0xFFC27400)
-    val Live get() = Color(0xFFE10600)
+    val TextMuted get() = pick(0xFF8A93BD, 0xFF5F6788)
+    val Success get() = pick(0xFF00E676, 0xFF007638)
+    val Warning get() = pick(0xFFFFAB00, 0xFF965800)
 
     /** "glass-light" flattened onto the background. */
     val Card get() = pick(0xFF0F1325, 0xFFFFFFFF)
     val GlassBorder get() = pick(0x14FFFFFF, 0x170C0F1A)
     val Bar get() = pick(0xF20C0F1C, 0xF5FFFFFF)
+}
+
+/** WCAG relative luminance, for picking readable variants of team colours. */
+fun luminance(c: Color): Float {
+    fun ch(v: Float) = if (v <= 0.03928f) v / 12.92f else Math.pow(((v + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    return 0.2126f * ch(c.red) + 0.7152f * ch(c.green) + 0.0722f * ch(c.blue)
+}
+
+fun contrast(a: Color, b: Color): Float {
+    val la = luminance(a)
+    val lb = luminance(b)
+    return (maxOf(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
+}
+
+/**
+ * A team's colour made readable as text on cards: lightened on dark, darkened on light, only
+ * as far as needed for 4.5:1, so it still looks like the team. Stripes and bars keep the real one.
+ */
+fun readable(c: Color, on: Color = C.Card): Color {
+    if (contrast(c, on) >= 4.5f) return c
+    val toward = if (C.dark) Color.White else Color.Black
+    var t = 0.05f
+    while (t < 1f) {
+        val m = androidx.compose.ui.graphics.lerp(c, toward, t)
+        if (contrast(m, on) >= 4.5f) return m
+        t += 0.05f
+    }
+    return toward
 }
 
 val Orbitron = FontFamily(
@@ -82,7 +119,7 @@ val LocalFmt = staticCompositionLocalOf { Fmt(ZoneId.systemDefault(), false) }
 
 /** Colours for a session name: race red, sprint amber, qualifying cyan, practice soft cyan. */
 fun sessionColor(name: String): Color = when {
-    name == "Race" -> C.Live
+    name == "Race" -> C.AccentText
     name.contains("Sprint") -> C.Warning
     name == "Qualifying" -> C.Highlight
     else -> C.Highlight.copy(alpha = 0.7f)

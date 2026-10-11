@@ -330,6 +330,20 @@ object Parsers {
 
 /** Results, podiums and weather: also pure, also JVM-testable. */
 object ResultParsers {
+    /** OpenF1 /v1/drivers: team name + "3671C6" → teamId → ARGB. */
+    fun teamColours(json: String): Map<String, Long> {
+        val arr = JSONArray(json)
+        val out = HashMap<String, Long>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = Teams.idFor(o.optString("team_name")) ?: continue
+            val hex = o.optString("team_colour").trim().removePrefix("#")
+            if (!hex.matches(Regex("[0-9a-fA-F]{6}"))) continue
+            out[id] = 0xFF000000L or hex.toLong(16)
+        }
+        return out
+    }
+
     private fun races(json: String): JSONArray? =
         JSONObject(json).optJSONObject("MRData")?.optJSONObject("RaceTable")?.optJSONArray("Races")
 

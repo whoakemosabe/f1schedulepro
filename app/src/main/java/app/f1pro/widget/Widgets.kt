@@ -58,19 +58,42 @@ object Widgets {
     }
 }
 
-private val Bg = Color(0xF20C0F1A)
-private val Text1 = Color(0xFFF0F2FF)
-private val Text2 = Color(0xFFA0A8C8)
-private val Muted = Color(0xFF6670A0)
-private val Red = Color(0xFFE10600)
-private val Cyan = Color(0xFF00D4FF)
-private val Amber = Color(0xFFFFAB00)
+/** Widget colours for the app's theme setting; "system" follows the phone's day/night. */
+class Pal(
+    val bg: ColorProvider,
+    val text1: ColorProvider,
+    val text2: ColorProvider,
+    val muted: ColorProvider,
+    val red: ColorProvider,
+    val cyan: ColorProvider,
+    val amber: ColorProvider,
+    /** Countdown digits are drawn by a Chronometer, which needs a plain colour. */
+    val cyanArgb: Int,
+) {
+    companion object {
+        private val dark = listOf(0xF20C0F1A, 0xFFF0F2FF, 0xFFA0A8C8, 0xFF8A93BD, 0xFFFF4A44, 0xFF00D4FF, 0xFFFFAB00)
+        private val light = listOf(0xF5FFFFFF, 0xFF0C0F1A, 0xFF434B6B, 0xFF5F6788, 0xFFC40500, 0xFF006E8F, 0xFF965800)
 
-private fun sessionColor(name: String): Color = when {
-    name == "Race" -> Red
-    name.contains("Sprint") -> Amber
-    name == "Qualifying" -> Cyan
-    else -> Text2
+        fun of(context: Context): Pal {
+            val theme = Prefs(context).theme
+            val night = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+            fun cp(i: Int): ColorProvider = when (theme) {
+                "light" -> ColorProvider(Color(light[i]))
+                "system" -> androidx.glance.color.ColorProvider(day = Color(light[i]), night = Color(dark[i]))
+                else -> ColorProvider(Color(dark[i]))
+            }
+            val useDark = theme == "dark" || (theme == "system" && night)
+            return Pal(cp(0), cp(1), cp(2), cp(3), cp(4), cp(5), cp(6), (if (useDark) dark[5] else light[5]).toInt())
+        }
+    }
+}
+
+private fun sessionColor(name: String, p: Pal): ColorProvider = when {
+    name == "Race" -> p.red
+    name.contains("Sprint") -> p.amber
+    name == "Qualifying" -> p.cyan
+    else -> p.text2
 }
 
 /** Everything the widgets show, computed from the cached calendar. */
@@ -85,7 +108,9 @@ class WidgetData(
         fun load(context: Context): WidgetData {
             val now = System.currentTimeMillis()
             val prefs = Prefs(context)
-            val seasons = Repo(context).seasons()
+            val repo = Repo(context)
+            repo.loadTeamColours()
+            val seasons = repo.seasons()
             return WidgetData(
                 now = now,
                 fmt = Fmt(prefs.zone(), prefs.is24h(context)),
@@ -102,7 +127,7 @@ class NextWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = withContext(Dispatchers.IO) { WidgetData.load(context) }
-        provideContent { NextContent(context, data) }
+        provideContent { NextContent(context, data, Pal.of(context)) }
     }
 }
 
@@ -111,7 +136,7 @@ class WeekendWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = withContext(Dispatchers.IO) { WidgetData.load(context) }
-        provideContent { WeekendContent(context, data) }
+        provideContent { WeekendContent(context, data, Pal.of(context)) }
     }
 }
 
@@ -125,7 +150,9 @@ class DriverData(
     companion object {
         fun load(context: Context): DriverData {
             val fav = Prefs(context).favourite
-            val st = Repo(context).cachedStandings()
+            val repo = Repo(context)
+            repo.loadTeamColours()
+            val st = repo.cachedStandings()
             val drivers = st?.drivers.orEmpty()
             val row = fav?.let { f -> drivers.firstOrNull { f.matches(it.name, it.surname) } }
             return DriverData(fav, row, drivers.firstOrNull(), drivers.getOrNull(1))
@@ -138,7 +165,7 @@ class DriverWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = withContext(Dispatchers.IO) { DriverData.load(context) }
-        provideContent { DriverContent(data) }
+        provideContent { DriverContent(data, Pal.of(context)) }
     }
 }
 
@@ -166,29 +193,29 @@ class WeekendWidgetReceiver : GlanceAppWidgetReceiver() {
 
 @Suppress("UNUSED_PARAMETER")
 private fun style(
-    color: Color,
+    color: ColorProvider,
     size: Int,
     weight: FontWeight = FontWeight.Normal,
     condensed: Boolean = false,
     strike: Boolean = false,
 ) = TextStyle(
-    color = ColorProvider(color),
+    color = color,
     fontSize = size.sp,
     fontWeight = weight,
     textDecoration = if (strike) TextDecoration.LineThrough else TextDecoration.None,
 )
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
+private fun Card(p: Pal, content: @Composable () -> Unit) {
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .cornerRadius(22.dp)
-            .background(Bg)
+            .background(p.bg)
             .clickable(actionStartActivity<MainActivity>()),
     ) {
         Row(modifier = GlanceModifier.fillMaxSize()) {
-            Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(Red)) {}
+            Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(p.red)) {}
             Box(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) { content() }
         }
     }
@@ -196,20 +223,21 @@ private fun Card(content: @Composable () -> Unit) {
 
 /** A countdown that ticks by itself in the launcher (under a day), or a plain "in 3d 4h". */
 @Composable
-private fun Countdown(context: Context, target: Long, now: Long, small: Boolean) {
+private fun Countdown(context: Context, p: Pal, target: Long, now: Long, small: Boolean) {
     val rem = target - now
     if (rem in 1 until DAY_MS) {
         val rv = RemoteViews(context.packageName, if (small) R.layout.widget_chrono_small else R.layout.widget_chrono)
         rv.setChronometer(R.id.chrono, SystemClock.elapsedRealtime() + rem, null, true)
         rv.setChronometerCountDown(R.id.chrono, true)
+        rv.setTextColor(R.id.chrono, p.cyanArgb)
         AndroidRemoteViews(rv)
     } else {
-        Text(Fmt.until(target, now), style = style(Cyan, if (small) 15 else 20, FontWeight.Bold, condensed = true), maxLines = 1)
+        Text(Fmt.until(target, now), style = style(p.cyan, if (small) 15 else 20, FontWeight.Bold, condensed = true), maxLines = 1)
     }
 }
 
 @Composable
-private fun DriverContent(d: DriverData) {
+private fun DriverContent(d: DriverData, p: Pal) {
     val fav = d.fav
     val row = d.row
     val team = Color(app.f1pro.data.Teams.color(row?.teamId ?: fav?.teamId ?: ""))
@@ -217,24 +245,24 @@ private fun DriverContent(d: DriverData) {
         modifier = GlanceModifier
             .fillMaxSize()
             .cornerRadius(22.dp)
-            .background(Bg)
+            .background(p.bg)
             .clickable(actionStartActivity<MainActivity>()),
     ) {
         Row(modifier = GlanceModifier.fillMaxSize()) {
-            Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(team)) {}
+            Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(ColorProvider(team))) {}
             Column(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
                 if (fav == null) {
-                    Text("YOUR DRIVER", style = style(Muted, 10, FontWeight.Bold))
+                    Text("YOUR DRIVER", style = style(p.muted, 10, FontWeight.Bold))
                     Spacer(GlanceModifier.defaultWeight())
-                    Text("Pick one in Settings", style = style(Text1, 13, FontWeight.Medium))
+                    Text("Pick one in Settings", style = style(p.text1, 13, FontWeight.Medium))
                 } else {
-                    Text(fav.familyName.uppercase(), style = style(Muted, 10, FontWeight.Bold), maxLines = 1)
+                    Text(fav.familyName.uppercase(), style = style(p.muted, 10, FontWeight.Bold), maxLines = 1)
                     Spacer(GlanceModifier.defaultWeight())
                     if (row == null) {
-                        Text("—", style = style(Text1, 26, FontWeight.Bold))
-                        Text("Open F1 Pro to load standings", style = style(Muted, 11), maxLines = 2)
+                        Text("—", style = style(p.text1, 26, FontWeight.Bold))
+                        Text("Open F1 Pro to load standings", style = style(p.muted, 11), maxLines = 2)
                     } else {
-                        Text("P${row.position}", style = style(Text1, 28, FontWeight.Bold))
+                        Text("P${row.position}", style = style(p.text1, 28, FontWeight.Bold))
                         val leader = d.leader
                         val second = d.second
                         val gap = when {
@@ -242,7 +270,7 @@ private fun DriverContent(d: DriverData) {
                             leader != null && row.position != 1 -> " · -${Fmt.points(leader.points - row.points)}"
                             else -> ""
                         }
-                        Text("${Fmt.points(row.points)} pts$gap", style = style(Text2, 11), maxLines = 1)
+                        Text("${Fmt.points(row.points)} pts$gap", style = style(p.text2, 11), maxLines = 1)
                     }
                 }
             }
@@ -251,51 +279,51 @@ private fun DriverContent(d: DriverData) {
 }
 
 @Composable
-private fun NextContent(context: Context, d: WidgetData) {
-    Card {
+private fun NextContent(context: Context, d: WidgetData, p: Pal) {
+    Card(p) {
         Column(modifier = GlanceModifier.fillMaxSize()) {
             val live = d.live
             val next = d.next
             if (live != null) {
-                Text("● LIVE", style = style(Red, 11, FontWeight.Bold))
+                Text("● LIVE", style = style(p.red, 11, FontWeight.Bold))
                 Spacer(GlanceModifier.height(4.dp))
-                Text("${live.race.circuit.flag} ${live.race.name}", style = style(Text1, 13, FontWeight.Medium), maxLines = 2)
+                Text("${live.race.circuit.flag} ${live.race.name}", style = style(p.text1, 13, FontWeight.Medium), maxLines = 2)
                 Spacer(GlanceModifier.defaultWeight())
-                Text(live.session.name.uppercase(), style = style(sessionColor(live.session.name), 18, FontWeight.Bold, condensed = true), maxLines = 1)
+                Text(live.session.name.uppercase(), style = style(sessionColor(live.session.name, p), 18, FontWeight.Bold, condensed = true), maxLines = 1)
                 if (next != null) {
-                    Text("Next: ${next.session.short} ${d.fmt.day(next.session.start)} ${d.fmt.shortTime(next.session.start)}", style = style(Muted, 11), maxLines = 1)
+                    Text("Next: ${next.session.short} ${d.fmt.day(next.session.start)} ${d.fmt.shortTime(next.session.start)}", style = style(p.muted, 11), maxLines = 1)
                 }
             } else if (next != null) {
-                Text("NEXT SESSION", style = style(Muted, 10, FontWeight.Bold))
+                Text("NEXT SESSION", style = style(p.muted, 10, FontWeight.Bold))
                 Spacer(GlanceModifier.height(4.dp))
-                Text("${next.race.circuit.flag} ${next.race.name}", style = style(Text1, 13, FontWeight.Medium), maxLines = 2)
+                Text("${next.race.circuit.flag} ${next.race.name}", style = style(p.text1, 13, FontWeight.Medium), maxLines = 2)
                 Spacer(GlanceModifier.defaultWeight())
-                Text(next.session.name.uppercase(), style = style(sessionColor(next.session.name), 11, FontWeight.Bold), maxLines = 1)
-                Countdown(context, next.session.start, d.now, small = LocalSize.current.width.value < 150)
+                Text(next.session.name.uppercase(), style = style(sessionColor(next.session.name, p), 11, FontWeight.Bold), maxLines = 1)
+                Countdown(context, p, next.session.start, d.now, small = LocalSize.current.width.value < 150)
                 Text(
                     "${d.fmt.day(next.session.start)} ${d.fmt.shortTime(next.session.start)} ${d.fmt.abbr(next.session.start)}",
-                    style = style(Text2, 11),
+                    style = style(p.text2, 11),
                     maxLines = 1,
                 )
             } else {
-                Text("F1 PRO", style = style(Red, 12, FontWeight.Bold))
+                Text("F1 PRO", style = style(p.red, 12, FontWeight.Bold))
                 Spacer(GlanceModifier.defaultWeight())
-                Text("No sessions scheduled", style = style(Text1, 13, FontWeight.Medium))
-                Text("Open the app to refresh", style = style(Muted, 11))
+                Text("No sessions scheduled", style = style(p.text1, 13, FontWeight.Medium))
+                Text("Open the app to refresh", style = style(p.muted, 11))
             }
         }
     }
 }
 
 @Composable
-private fun WeekendContent(context: Context, d: WidgetData) {
-    Card {
+private fun WeekendContent(context: Context, d: WidgetData, p: Pal) {
+    Card(p) {
         val race = d.weekend
         if (race == null) {
             Column(modifier = GlanceModifier.fillMaxSize()) {
-                Text("F1 PRO", style = style(Red, 12, FontWeight.Bold))
+                Text("F1 PRO", style = style(p.red, 12, FontWeight.Bold))
                 Spacer(GlanceModifier.defaultWeight())
-                Text("No race weekend scheduled", style = style(Text1, 13, FontWeight.Medium))
+                Text("No race weekend scheduled", style = style(p.text1, 13, FontWeight.Medium))
             }
             return@Card
         }
@@ -303,15 +331,15 @@ private fun WeekendContent(context: Context, d: WidgetData) {
         val liveInRace = race.liveSession(d.now)
         Column(modifier = GlanceModifier.fillMaxSize()) {
             Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${race.circuit.flag} ", style = style(Text1, 14))
+                Text("${race.circuit.flag} ", style = style(p.text1, 14))
                 Column(modifier = GlanceModifier.defaultWeight()) {
-                    Text(race.name, style = style(Text1, 13, FontWeight.Bold), maxLines = 1)
-                    Text("${race.label} · ${race.circuit.locality}", style = style(Muted, 10), maxLines = 1)
+                    Text(race.name, style = style(p.text1, 13, FontWeight.Bold), maxLines = 1)
+                    Text("${race.label} · ${race.circuit.locality}", style = style(p.muted, 10), maxLines = 1)
                 }
                 if (liveInRace != null) {
-                    Text("● LIVE", style = style(Red, 11, FontWeight.Bold))
+                    Text("● LIVE", style = style(p.red, 11, FontWeight.Bold))
                 } else if (nextInRace != null && !nextInRace.tbc) {
-                    Countdown(context, nextInRace.start, d.now, small = true)
+                    Countdown(context, p, nextInRace.start, d.now, small = true)
                 }
             }
             Spacer(GlanceModifier.height(6.dp))
@@ -320,10 +348,10 @@ private fun WeekendContent(context: Context, d: WidgetData) {
                 val isLive = s.isLive(d.now)
                 val isNext = !isLive && nextInRace?.name == s.name
                 val color = when {
-                    isLive -> Red
-                    past -> Muted
-                    isNext -> Cyan
-                    else -> Text2
+                    isLive -> p.red
+                    past -> p.muted
+                    isNext -> p.cyan
+                    else -> p.text2
                 }
                 Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -334,7 +362,7 @@ private fun WeekendContent(context: Context, d: WidgetData) {
                     )
                     Text(
                         if (s.tbc) "${d.fmt.day(s.start)} TBC" else "${d.fmt.day(s.start)} ${d.fmt.shortTime(s.start)}",
-                        style = style(if (past) Muted else Text2, 12, FontWeight.Medium, condensed = true),
+                        style = style(if (past) p.muted else p.text2, 12, FontWeight.Medium, condensed = true),
                         maxLines = 1,
                     )
                 }

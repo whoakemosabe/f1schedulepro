@@ -281,6 +281,33 @@ class Repo(context: Context) {
         return lat to lon
     }
 
+    // ── Team colours (OpenF1, free once a session is over) ──
+
+    private val teamColourFile get() = File(dir, "team-colours.json")
+
+    /** Loads cached official colours into [Teams.live]. Cheap; call at startup and in widgets. */
+    fun loadTeamColours() {
+        if (Teams.live.isNotEmpty()) return
+        try {
+            val o = JSONObject(teamColourFile.readText())
+            Teams.live = ResultParsers.teamColours(o.getString("raw"))
+        } catch (e: Exception) { }
+    }
+
+    /** Refreshes the official colours at most daily. During a live session OpenF1 needs a login; that just fails quietly. */
+    suspend fun refreshTeamColours(force: Boolean = false) = withContext(Dispatchers.IO) {
+        val at = try { JSONObject(teamColourFile.readText()).optLong("at") } catch (e: Exception) { 0L }
+        if (!force && System.currentTimeMillis() - at < 24 * HOUR_MS) return@withContext
+        try {
+            val raw = Net.get("https://api.openf1.org/v1/drivers?session_key=latest", "application/json")
+            val map = ResultParsers.teamColours(raw)
+            if (map.size >= 8) {
+                teamColourFile.writeText(JSONObject().put("raw", raw).put("at", System.currentTimeMillis()).toString())
+                Teams.live = map
+            }
+        } catch (e: Exception) { }
+    }
+
     // ── News ──
 
     fun cachedNews(): Pair<List<NewsItem>, Long> = try {

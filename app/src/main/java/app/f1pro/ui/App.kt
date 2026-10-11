@@ -15,7 +15,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 
@@ -33,28 +44,59 @@ fun F1App(state: AppState) {
         if (state.openRaceKey != null) state.tab = Tab.Schedule
     }
 
+    // Two recordings for the glass: the background alone, and background + page.
+    val bgBackdrop = rememberLayerBackdrop()
+    val pageBackdrop = rememberLayerBackdrop()
+    val density = LocalDensity.current
+    var topPx by remember { mutableIntStateOf(0) }
+    var bottomPx by remember { mutableIntStateOf(0) }
+    val chrome = with(density) { PaddingValues(top = topPx.toDp(), bottom = bottomPx.toDp()) }
+
     CompositionLocalProvider(LocalFmt provides state.fmt) {
-        Column(Modifier.fillMaxSize().background(C.Bg)) {
-            Header(state)
-            UpdateBanner()
-            CrashCard(state)
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                AnimatedContent(
-                    targetState = state.tab,
-                    transitionSpec = {
-                        (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 60 }) togetherWith fadeOut(tween(90))
-                    },
-                    label = "tab",
-                ) { tab ->
-                    when (tab) {
-                        Tab.Schedule -> SchedulePage(state, scheduleList)
-                        Tab.Standings -> StandingsPage(state, standingsList)
-                        Tab.News -> NewsPage(state, newsList)
-                        Tab.Settings -> SettingsPage(state)
+        Box(Modifier.fillMaxSize()) {
+            // The page scrolls under the floating header and tab bar.
+            Box(Modifier.fillMaxSize().layerBackdrop(pageBackdrop)) {
+                F1Background(Modifier.fillMaxSize().layerBackdrop(bgBackdrop))
+                CompositionLocalProvider(LocalBgBackdrop provides bgBackdrop, LocalChrome provides chrome) {
+                    AnimatedContent(
+                        targetState = state.tab,
+                        transitionSpec = {
+                            (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 60 }) togetherWith fadeOut(tween(90))
+                        },
+                        label = "tab",
+                    ) { tab ->
+                        when (tab) {
+                            Tab.Schedule -> SchedulePage(state, scheduleList)
+                            Tab.Standings -> StandingsPage(state, standingsList)
+                            Tab.News -> NewsPage(state, newsList)
+                            Tab.Settings -> SettingsPage(state)
+                        }
                     }
                 }
             }
-            BottomNav(state)
+
+            CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
+                Column(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .onSizeChanged { topPx = it.height }
+                ) {
+                    var headerPx by remember { mutableIntStateOf(0) }
+                    Box(Modifier.fillMaxWidth()) {
+                        GlassHeader(pageBackdrop, with(density) { headerPx.toDp() } + 20.dp)
+                        Box(Modifier.fillMaxWidth().onSizeChanged { headerPx = it.height }) { Header(state) }
+                    }
+                    UpdateBanner()
+                    CrashCard(state)
+                }
+                BottomNav(
+                    state,
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { bottomPx = it.height },
+                )
+            }
         }
     }
 }

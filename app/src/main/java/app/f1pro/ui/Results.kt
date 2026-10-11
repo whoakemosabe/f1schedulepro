@@ -157,7 +157,7 @@ fun ResultsCard(state: AppState, race: Race, now: Long) {
                         style = inter(12.sp, color = C.TextMuted),
                         textAlign = TextAlign.Center,
                     )
-                    Chip("Try again", icon = R.drawable.lc_refresh_cw, iconColor = C.Accent) { state.loadResults(race) }
+                    Chip("Try again", icon = R.drawable.lc_refresh_cw, iconColor = C.AccentText) { state.loadResults(race) }
                 }
             tab == "Qualifying" -> {
                 QualiHeader()

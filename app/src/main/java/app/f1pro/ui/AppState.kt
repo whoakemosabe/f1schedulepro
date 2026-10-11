@@ -189,7 +189,12 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Bumped when official team colours arrive, so coloured stripes redraw. */
+    var teamColoursVersion by mutableLongStateOf(0L)
+        private set
+
     init {
+        repo.loadTeamColours()
         Haptics.enabled = prefs.haptics
         UpdateWatch.load(this.context)
     }
@@ -205,6 +210,14 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         }
         scope.launch { try { UpdateWatch.check(context, background = false) } catch (e: Exception) { } }
         seasonFor(System.currentTimeMillis())?.let { loadPodiums(it.year) }
+        scope.launch {
+            val before = app.f1pro.data.Teams.live
+            repo.refreshTeamColours()
+            if (app.f1pro.data.Teams.live != before) {
+                teamColoursVersion = System.currentTimeMillis()
+                withContext(Dispatchers.IO) { try { Widgets.updateAll(context) } catch (e: Exception) { } }
+            }
+        }
         scope.launch(Dispatchers.IO) { try { app.f1pro.work.ResultsWatch.schedule(context, seasons) } catch (e: Exception) { } }
     }
 
