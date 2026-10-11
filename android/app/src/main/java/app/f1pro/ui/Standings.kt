@@ -64,11 +64,11 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     val st = state.standings
     val now = rememberNow(60_000)
     val calendarYear = remember(state.seasons, now) { state.seasonFor(now)?.year }
-    val view = androidx.compose.ui.platform.LocalView.current
+    val hv = androidx.compose.ui.platform.LocalView.current
     var pulled by remember { mutableStateOf(false) }
     LaunchedEffect(state.standingsLoading) {
         if (!state.standingsLoading && pulled) {
-            if (state.standingsError == null) Haptics.confirm(view) else Haptics.reject(view)
+            if (state.standingsError == null) Haptics.confirm(hv) else Haptics.reject(hv)
             pulled = false
         }
     }
@@ -76,7 +76,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     PullToRefreshBox(
         isRefreshing = state.standingsLoading && st != null,
         onRefresh = {
-            Haptics.settle(view)
+            Haptics.settle(hv)
             pulled = true
             state.loadStandings()
         },
