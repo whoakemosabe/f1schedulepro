@@ -12,7 +12,9 @@
   },
   "type": "hybrid",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Melbourne_Grand_Prix_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Melbourne_Grand_Prix_Circuit",
+  "lat": -37.8497,
+  "lon": 144.968
  },
  "shanghai": {
   "lengthKm": 5.451,
@@ -27,7 +29,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Shanghai_International_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Shanghai_International_Circuit",
+  "lat": 31.3389,
+  "lon": 121.22
  },
  "suzuka": {
   "lengthKm": 5.807,
@@ -42,7 +46,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Suzuka_International_Racing_Course"
+  "wiki": "https://en.wikipedia.org/wiki/Suzuka_International_Racing_Course",
+  "lat": 34.8431,
+  "lon": 136.541
  },
  "bahrain": {
   "lengthKm": 5.412,
@@ -57,7 +63,9 @@
   },
   "type": "permanent",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Bahrain_International_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Bahrain_International_Circuit",
+  "lat": 26.0325,
+  "lon": 50.5106
  },
  "jeddah": {
   "lengthKm": 6.174,
@@ -72,7 +80,9 @@
   },
   "type": "street",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Jeddah_Corniche_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Jeddah_Corniche_Circuit",
+  "lat": 21.6319,
+  "lon": 39.1044
  },
  "miami": {
   "lengthKm": 5.412,
@@ -87,7 +97,9 @@
   },
   "type": "hybrid",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Miami_International_Autodrome"
+  "wiki": "https://en.wikipedia.org/wiki/Miami_International_Autodrome",
+  "lat": 25.9581,
+  "lon": -80.2389
  },
  "villeneuve": {
   "lengthKm": 4.361,
@@ -102,7 +114,9 @@
   },
   "type": "hybrid",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_Gilles_Villeneuve"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_Gilles_Villeneuve",
+  "lat": 45.5,
+  "lon": -73.5228
  },
  "monaco": {
   "lengthKm": 3.337,
@@ -117,7 +131,9 @@
   },
   "type": "street",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Monaco"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Monaco",
+  "lat": 43.7347,
+  "lon": 7.42056
  },
  "catalunya": {
   "lengthKm": 4.657,
@@ -132,7 +148,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Barcelona-Catalunya"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Barcelona-Catalunya",
+  "lat": 41.57,
+  "lon": 2.26111
  },
  "red_bull_ring": {
   "lengthKm": 4.318,
@@ -147,7 +165,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Red_Bull_Ring"
+  "wiki": "https://en.wikipedia.org/wiki/Red_Bull_Ring",
+  "lat": 47.2197,
+  "lon": 14.7647
  },
  "silverstone": {
   "lengthKm": 5.891,
@@ -162,7 +182,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Silverstone_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Silverstone_Circuit",
+  "lat": 52.0786,
+  "lon": -1.01694
  },
  "spa": {
   "lengthKm": 7.004,
@@ -177,7 +199,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Spa-Francorchamps"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_de_Spa-Francorchamps",
+  "lat": 50.4372,
+  "lon": 5.97139
  },
  "hungaroring": {
   "lengthKm": 4.381,
@@ -192,7 +216,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Hungaroring"
+  "wiki": "https://en.wikipedia.org/wiki/Hungaroring",
+  "lat": 47.5789,
+  "lon": 19.2486
  },
  "zandvoort": {
   "lengthKm": 4.259,
@@ -207,7 +233,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_Zandvoort"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_Zandvoort",
+  "lat": 52.3888,
+  "lon": 4.54092
  },
  "monza": {
   "lengthKm": 5.793,
@@ -222,7 +250,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Monza_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Monza_Circuit",
+  "lat": 45.6156,
+  "lon": 9.28111
  },
  "madring": {
   "lengthKm": 5.473,
@@ -231,7 +261,9 @@
   "firstGP": 2026,
   "type": "street",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Madrid_Street_Circuit_(Formula_One)"
+  "wiki": "https://en.wikipedia.org/wiki/Madrid_Street_Circuit_(Formula_One)",
+  "lat": 40.46528,
+  "lon": -3.61528
  },
  "baku": {
   "lengthKm": 6.003,
@@ -246,7 +278,9 @@
   },
   "type": "street",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Baku_City_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Baku_City_Circuit",
+  "lat": 40.3725,
+  "lon": 49.8533
  },
  "marina_bay": {
   "lengthKm": 4.94,
@@ -261,7 +295,9 @@
   },
   "type": "street",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Marina_Bay_Street_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Marina_Bay_Street_Circuit",
+  "lat": 1.2914,
+  "lon": 103.864
  },
  "americas": {
   "lengthKm": 5.513,
@@ -276,7 +312,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Circuit_of_the_Americas"
+  "wiki": "https://en.wikipedia.org/wiki/Circuit_of_the_Americas",
+  "lat": 30.1328,
+  "lon": -97.6411
  },
  "rodriguez": {
   "lengthKm": 4.304,
@@ -291,7 +329,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez"
+  "wiki": "https://en.wikipedia.org/wiki/Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez",
+  "lat": 19.4042,
+  "lon": -99.0907
  },
  "interlagos": {
   "lengthKm": 4.309,
@@ -306,7 +346,9 @@
   },
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Interlagos_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Interlagos_Circuit",
+  "lat": -23.7036,
+  "lon": -46.6997
  },
  "vegas": {
   "lengthKm": 6.201,
@@ -321,7 +363,9 @@
   },
   "type": "street",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Las_Vegas_Strip_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Las_Vegas_Strip_Circuit",
+  "lat": 36.1147,
+  "lon": -115.173
  },
  "losail": {
   "lengthKm": 5.38,
@@ -336,7 +380,9 @@
   },
   "type": "permanent",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Losail_International_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Losail_International_Circuit",
+  "lat": 25.49,
+  "lon": 51.4542
  },
  "yas_marina": {
   "lengthKm": 5.281,
@@ -351,7 +397,9 @@
   },
   "type": "permanent",
   "night": true,
-  "wiki": "https://en.wikipedia.org/wiki/Yas_Marina_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Yas_Marina_Circuit",
+  "lat": 24.4672,
+  "lon": 54.6031
  },
  "sepang": {
   "lengthKm": 5.543,
@@ -360,6 +408,8 @@
   "firstGP": 1999,
   "type": "permanent",
   "night": false,
-  "wiki": "https://en.wikipedia.org/wiki/Sepang_International_Circuit"
+  "wiki": "https://en.wikipedia.org/wiki/Sepang_International_Circuit",
+  "lat": 2.76083,
+  "lon": 101.738
  }
 }

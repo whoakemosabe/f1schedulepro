@@ -185,6 +185,8 @@ fun SettingsPage(state: AppState) {
         // ── Appearance ──
         SettingsCard("Appearance", R.drawable.lc_moon) {
             Segments(listOf("dark" to "Dark", "light" to "Light", "system" to "System"), state.theme) { state.chooseTheme(it) }
+            Small("Temperature")
+            Segments(listOf("c" to "°C", "f" to "°F"), if (state.fahrenheit) "f" else "c") { state.chooseFahrenheit(it == "f") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Haptics", style = inter(14.sp, FontWeight.Medium))
@@ -302,9 +304,12 @@ fun SettingsPage(state: AppState) {
             }
         }
 
+        // ── Your driver ──
+        FavouriteSettings(state)
+
         // ── Widgets ──
         SettingsCard("Widgets", R.drawable.lc_timer) {
-            Small("A next-session countdown (2×2) and the full race weekend (4×2). Long-press your home screen → Widgets → F1 Pro, or add one here:")
+            Small("A next-session countdown (2×2), the full race weekend (4×2) and your driver (2×2). Long-press your home screen → Widgets → F1 Pro, or add one here:")
             val awm = AppWidgetManager.getInstance(context)
             if (awm.isRequestPinAppWidgetSupported) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -318,6 +323,9 @@ fun SettingsPage(state: AppState) {
                             awm.requestPinAppWidget(ComponentName(context, WeekendWidgetReceiver::class.java), null, null)
                         }
                     }
+                }
+                ActionButton("Your driver", R.drawable.lc_star) {
+                    awm.requestPinAppWidget(ComponentName(context, app.f1pro.widget.DriverWidgetReceiver::class.java), null, null)
                 }
             }
         }
@@ -452,5 +460,103 @@ fun ProgressLine(progress: Float) {
                 .clip(CircleShape)
                 .background(Brush.horizontalGradient(listOf(C.Accent, C.AccentGlow)))
         )
+    }
+}
+
+/** Pick a favourite driver (from the current standings) and whether to hear how they did. */
+@Composable
+private fun FavouriteSettings(state: AppState) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val fav = state.favourite
+    val drivers = state.standings?.drivers.orEmpty()
+    var open by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
+    val context = LocalContext.current
+    var canNotify by remember { mutableStateOf(Alerts.canNotify(context)) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { canNotify = it }
+
+    SettingsCard("Your driver", R.drawable.lc_star, if (fav != null) C.Highlight else C.TextMuted) {
+        Box {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(C.SurfaceLight)
+                    .border(1.dp, C.Border, RoundedCornerShape(8.dp))
+                    .tap { open = true }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (fav != null) {
+                    Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Color(app.f1pro.data.Teams.color(fav.teamId))))
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(fav?.name ?: "No favourite", style = inter(14.sp, FontWeight.SemiBold, if (fav != null) C.Text else C.TextMuted), modifier = Modifier.weight(1f))
+                if (fav != null) Text(app.f1pro.data.Teams.shortName(fav.teamName), style = inter(11.sp, color = C.TextSecondary))
+                Spacer(Modifier.width(8.dp))
+                Ic(R.drawable.lc_chevron_down, C.TextMuted, 14.dp)
+            }
+            DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                containerColor = C.Surface,
+                modifier = Modifier.heightIn(max = 420.dp),
+            ) {
+                DropdownMenuItem(
+                    text = { Text("No favourite", style = inter(14.sp, FontWeight.Medium, if (fav == null) C.Accent else C.Text)) },
+                    onClick = {
+                        if (fav != null) Haptics.segment(view)
+                        state.chooseFavourite(null)
+                        open = false
+                    },
+                )
+                if (drivers.isEmpty()) {
+                    DropdownMenuItem(
+                        text = { Text("Loading drivers…", style = inter(13.sp, color = C.TextMuted)) },
+                        onClick = { state.loadStandings() },
+                    )
+                }
+                for (d in drivers) {
+                    val active = fav?.matches(d.name, d.surname) == true
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Color(app.f1pro.data.Teams.color(d.teamId))))
+                        },
+                        text = {
+                            Column {
+                                Text("${d.name} ${d.surname}", style = inter(14.sp, FontWeight.Medium, if (active) C.Accent else C.Text))
+                                Text(app.f1pro.data.Teams.shortName(d.teamName) + " · P${d.position}", style = inter(11.sp, color = C.TextMuted))
+                            }
+                        },
+                        trailingIcon = { if (active) Ic(R.drawable.lc_check, C.Accent, 14.dp) },
+                        onClick = {
+                            if (!active) Haptics.segment(view)
+                            state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+        if (fav != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("How they did", style = inter(14.sp, FontWeight.Medium))
+                    Text("A notification after qualifying, sprints and races", style = inter(12.sp, color = C.TextSecondary))
+                }
+                val shown = state.resultAlerts && canNotify
+                Switch(shown) {
+                    if (shown) {
+                        state.chooseResultAlerts(false)
+                    } else {
+                        state.chooseResultAlerts(true)
+                        if (!canNotify && Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
+            Small("Highlighted in standings, results and the Your driver widget.")
+        } else {
+            Small("Pick a driver to highlight them in standings and results, get a widget, and hear how they did after each session.")
+        }
     }
 }

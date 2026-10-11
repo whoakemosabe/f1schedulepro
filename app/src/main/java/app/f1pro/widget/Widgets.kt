@@ -54,6 +54,7 @@ object Widgets {
     suspend fun updateAll(context: Context) {
         NextWidget().updateAll(context)
         WeekendWidget().updateAll(context)
+        DriverWidget().updateAll(context)
     }
 }
 
@@ -112,6 +113,37 @@ class WeekendWidget : GlanceAppWidget() {
         val data = withContext(Dispatchers.IO) { WidgetData.load(context) }
         provideContent { WeekendContent(context, data) }
     }
+}
+
+/** The favourite driver's championship position, from the cached standings. */
+class DriverData(
+    val fav: app.f1pro.data.Favourite?,
+    val row: app.f1pro.data.DriverStanding?,
+    val leader: app.f1pro.data.DriverStanding?,
+    val second: app.f1pro.data.DriverStanding?,
+) {
+    companion object {
+        fun load(context: Context): DriverData {
+            val fav = Prefs(context).favourite
+            val st = Repo(context).cachedStandings()
+            val drivers = st?.drivers.orEmpty()
+            val row = fav?.let { f -> drivers.firstOrNull { f.matches(it.name, it.surname) } }
+            return DriverData(fav, row, drivers.firstOrNull(), drivers.getOrNull(1))
+        }
+    }
+}
+
+class DriverWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val data = withContext(Dispatchers.IO) { DriverData.load(context) }
+        provideContent { DriverContent(data) }
+    }
+}
+
+class DriverWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = DriverWidget()
 }
 
 class NextWidgetReceiver : GlanceAppWidgetReceiver() {
@@ -173,6 +205,48 @@ private fun Countdown(context: Context, target: Long, now: Long, small: Boolean)
         AndroidRemoteViews(rv)
     } else {
         Text(Fmt.until(target, now), style = style(Cyan, if (small) 15 else 20, FontWeight.Bold, condensed = true), maxLines = 1)
+    }
+}
+
+@Composable
+private fun DriverContent(d: DriverData) {
+    val fav = d.fav
+    val row = d.row
+    val team = Color(app.f1pro.data.Teams.color(row?.teamId ?: fav?.teamId ?: ""))
+    Box(
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .cornerRadius(22.dp)
+            .background(Bg)
+            .clickable(actionStartActivity<MainActivity>()),
+    ) {
+        Row(modifier = GlanceModifier.fillMaxSize()) {
+            Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(team)) {}
+            Column(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
+                if (fav == null) {
+                    Text("YOUR DRIVER", style = style(Muted, 10, FontWeight.Bold))
+                    Spacer(GlanceModifier.defaultWeight())
+                    Text("Pick one in Settings", style = style(Text1, 13, FontWeight.Medium))
+                } else {
+                    Text(fav.familyName.uppercase(), style = style(Muted, 10, FontWeight.Bold), maxLines = 1)
+                    Spacer(GlanceModifier.defaultWeight())
+                    if (row == null) {
+                        Text("—", style = style(Text1, 26, FontWeight.Bold))
+                        Text("Open F1 Pro to load standings", style = style(Muted, 11), maxLines = 2)
+                    } else {
+                        Text("P${row.position}", style = style(Text1, 28, FontWeight.Bold))
+                        val leader = d.leader
+                        val second = d.second
+                        val gap = when {
+                            row.position == 1 && second != null -> " · +${Fmt.points(row.points - second.points)}"
+                            leader != null && row.position != 1 -> " · -${Fmt.points(leader.points - row.points)}"
+                            else -> ""
+                        }
+                        Text("${Fmt.points(row.points)} pts$gap", style = style(Text2, 11), maxLines = 1)
+                    }
+                }
+            }
+        }
     }
 }
 

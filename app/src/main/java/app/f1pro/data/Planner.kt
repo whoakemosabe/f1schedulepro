@@ -34,6 +34,16 @@ object Planner {
             ?: races.firstOrNull { it.status(now) == RaceStatus.UPCOMING }
     }
 
+    /**
+     * Race, sprint and qualifying sessions that ended in the last [windowMs]: the ones whose
+     * results we still want to report.
+     */
+    fun finishedForReport(seasons: List<SeasonCalendar>, now: Long, windowMs: Long = 12 * HOUR_MS): List<Slot> =
+        slots(seasons).filter { s ->
+            !s.session.tbc && s.session.name in Report.SESSIONS && !s.race.isTesting &&
+                s.session.end <= now && s.session.end > now - windowMs
+        }
+
     /** Reminders due now that haven't been sent yet. */
     fun dueReminders(
         seasons: List<SeasonCalendar>,

@@ -172,6 +172,115 @@ class Repo(context: Context) {
         }
     }
 
+    // ── Results ──
+
+    private fun resultsFile(season: Int, round: Int) = File(dir, "results-$season-$round.json")
+
+    fun cachedResults(season: Int, round: Int): WeekendResults? = try {
+        val o = JSONObject(resultsFile(season, round).readText())
+        WeekendResults(
+            season, round,
+            race = o.optString("race").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it) }.orEmpty(),
+            sprint = o.optString("sprint").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") }.orEmpty(),
+            quali = o.optString("quali").takeIf { it.isNotBlank() }?.let { ResultParsers.qualifying(it) }.orEmpty(),
+            fetchedAt = o.optLong("at"),
+        )
+    } catch (e: Exception) { null }
+
+    /** Race, sprint (on sprint weekends) and qualifying classifications for one round. */
+    suspend fun fetchResults(race: Race): WeekendResults = withContext(Dispatchers.IO) {
+        val base = "$JOLPICA/${race.season}/${race.round}"
+        coroutineScope {
+            val r = async { try { Net.get("$base/results.json?limit=40", "application/json") } catch (e: Exception) { null } }
+            val q = async { try { Net.get("$base/qualifying.json?limit=40", "application/json") } catch (e: Exception) { null } }
+            val sp = async {
+                if (race.isSprint) try { Net.get("$base/sprint.json?limit=40", "application/json") } catch (e: Exception) { null } else ""
+            }
+            val rj = r.await()
+            val qj = q.await()
+            val sj = sp.await()
+            if (rj == null && qj == null && sj.isNullOrEmpty()) throw IOException("Couldn't reach the results feed")
+            val prev = cachedResults(race.season, race.round)
+            val res = WeekendResults(
+                race.season, race.round,
+                race = rj?.let { ResultParsers.race(it) } ?: prev?.race.orEmpty(),
+                sprint = sj?.takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") } ?: prev?.sprint.orEmpty(),
+                quali = qj?.let { ResultParsers.qualifying(it) } ?: prev?.quali.orEmpty(),
+                fetchedAt = System.currentTimeMillis(),
+            )
+            // Keep the raw feeds that worked; fall back to what was cached for the ones that didn't.
+            val old = try { JSONObject(resultsFile(race.season, race.round).readText()) } catch (e: Exception) { JSONObject() }
+            resultsFile(race.season, race.round).writeText(
+                JSONObject()
+                    .put("race", rj ?: old.optString("race"))
+                    .put("sprint", sj ?: old.optString("sprint"))
+                    .put("quali", qj ?: old.optString("quali"))
+                    .put("at", res.fetchedAt)
+                    .toString()
+            )
+            res
+        }
+    }
+
+    /** Official standings after [round] of [season], if Jolpica has them yet. */
+    suspend fun standingsAfter(season: Int, round: Int): List<StandingAfter>? = withContext(Dispatchers.IO) {
+        try {
+            val (r, rows) = Report.standingsAfter(Net.get("$JOLPICA/$season/$round/driverStandings.json", "application/json")) ?: return@withContext null
+            rows.takeIf { r == round && it.isNotEmpty() }
+        } catch (e: Exception) { null }
+    }
+
+    // ── Podiums (for the race cards) ──
+
+    private fun podiumFile(season: Int) = File(dir, "podiums-$season.json")
+
+    fun cachedPodiums(season: Int): Pair<Map<Int, List<PodiumEntry>>, Long> = try {
+        val o = JSONObject(podiumFile(season).readText())
+        ResultParsers.podiums(listOf(o.optString("p1"), o.optString("p2"), o.optString("p3"))) to o.optLong("at")
+    } catch (e: Exception) { emptyMap<Int, List<PodiumEntry>>() to 0L }
+
+    suspend fun fetchPodiums(season: Int): Map<Int, List<PodiumEntry>> = withContext(Dispatchers.IO) {
+        val raw = coroutineScope {
+            (1..3).map { p -> async { Net.get("$JOLPICA/$season/results/$p.json?limit=40", "application/json") } }.map { it.await() }
+        }
+        podiumFile(season).writeText(
+            JSONObject().put("p1", raw[0]).put("p2", raw[1]).put("p3", raw[2]).put("at", System.currentTimeMillis()).toString()
+        )
+        ResultParsers.podiums(raw)
+    }
+
+    // ── Weather ──
+
+    private fun weatherFile(circuitId: String) = File(dir, "weather-$circuitId.json")
+
+    fun cachedWeather(circuitId: String): Forecast? = try {
+        val o = JSONObject(weatherFile(circuitId).readText())
+        ResultParsers.forecast(o.getString("raw"), o.optLong("at"))
+    } catch (e: Exception) { null }
+
+    /** Open-Meteo hourly + daily forecast at the track, in the track's own time zone. */
+    suspend fun fetchWeather(circuitId: String, lat: Double, lon: Double): Forecast = withContext(Dispatchers.IO) {
+        val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+            "&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+            "&timezone=auto&forecast_days=16"
+        val raw = Net.get(url, "application/json")
+        val now = System.currentTimeMillis()
+        val f = ResultParsers.forecast(raw, now)
+        if (f.hours.isEmpty()) throw IOException("No forecast")
+        weatherFile(circuitId).writeText(JSONObject().put("raw", raw).put("at", now).toString())
+        f
+    }
+
+    /** A circuit's position: from the live calendar, else the bundled circuit list. */
+    fun coords(circuit: Circuit): Pair<Double, Double>? {
+        if (circuit.lat != null && circuit.lon != null) return circuit.lat to circuit.lon
+        val s = circuits()[circuit.id] ?: return null
+        val lat = s.lat ?: return null
+        val lon = s.lon ?: return null
+        return lat to lon
+    }
+
     // ── News ──
 
     fun cachedNews(): Pair<List<NewsItem>, Long> = try {

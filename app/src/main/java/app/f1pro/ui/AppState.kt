@@ -91,6 +91,104 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     var haptics by mutableStateOf(prefs.haptics)
         private set
 
+    // ── Favourite driver ──
+
+    var favourite by mutableStateOf(prefs.favourite)
+        private set
+    var resultAlerts by mutableStateOf(prefs.resultAlerts)
+        private set
+    var fahrenheit by mutableStateOf(prefs.fahrenheit)
+        private set
+
+    fun chooseFavourite(f: app.f1pro.data.Favourite?) {
+        prefs.favourite = f
+        favourite = f
+        scope.launch(Dispatchers.IO) {
+            try { Widgets.updateAll(context) } catch (e: Exception) { }
+            try { app.f1pro.work.ResultsWatch.schedule(context, seasons) } catch (e: Exception) { }
+        }
+    }
+
+    fun chooseResultAlerts(on: Boolean) {
+        prefs.resultAlerts = on
+        resultAlerts = on
+        if (on) scope.launch(Dispatchers.IO) { try { app.f1pro.work.ResultsWatch.schedule(context, seasons) } catch (e: Exception) { } }
+    }
+
+    fun chooseFahrenheit(on: Boolean) {
+        prefs.fahrenheit = on
+        fahrenheit = on
+    }
+
+    /** "27°" in the chosen unit. */
+    fun temp(c: Double): String = if (fahrenheit) "${Math.round(c * 9 / 5 + 32)}°" else "${Math.round(c)}°"
+
+    // ── Podiums, results, weather ──
+
+    /** season → round → podium, for the race cards. */
+    val podiums = androidx.compose.runtime.mutableStateMapOf<Int, Map<Int, List<app.f1pro.data.PodiumEntry>>>()
+    private val podiumsAt = HashMap<Int, Long>()
+
+    fun loadPodiums(season: Int, force: Boolean = false) {
+        if (season !in podiums) {
+            val (cached, at) = repo.cachedPodiums(season)
+            if (cached.isNotEmpty()) podiums[season] = cached
+            podiumsAt[season] = at
+        }
+        if (!force && System.currentTimeMillis() - (podiumsAt[season] ?: 0L) < 30 * MIN_MS) return
+        podiumsAt[season] = System.currentTimeMillis()
+        scope.launch {
+            try { podiums[season] = repo.fetchPodiums(season) } catch (e: Exception) { }
+        }
+    }
+
+    /** race.key → results. */
+    val results = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.WeekendResults>()
+    val resultsLoading = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    val resultsFailed = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun loadResults(race: app.f1pro.data.Race) {
+        val key = race.key
+        if (key !in results) repo.cachedResults(race.season, race.round)?.let { results[key] = it }
+        val have = results[key]
+        val now = System.currentTimeMillis()
+        // Refetched at most every 10 minutes while results may still be landing or amended;
+        // once a weekend is three days old and its race is classified, the cache is final.
+        val settled = have != null && have.race.isNotEmpty() && now - race.endsAt > 3 * 24 * HOUR_MS
+        val fresh = have != null && (settled || now - have.fetchedAt < 10 * MIN_MS)
+        if (fresh || resultsLoading[key] == true) return
+        resultsLoading[key] = true
+        resultsFailed.remove(key)
+        scope.launch {
+            try {
+                results[key] = repo.fetchResults(race)
+            } catch (e: Exception) {
+                resultsFailed[key] = true
+            } finally {
+                resultsLoading[key] = false
+            }
+        }
+    }
+
+    /** circuitId → forecast. */
+    val weather = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.Forecast>()
+    private val weatherLoading = HashSet<String>()
+
+    fun loadWeather(race: app.f1pro.data.Race) {
+        val id = race.circuit.id
+        val now = System.currentTimeMillis()
+        // Open-Meteo forecasts 16 days ahead; nothing to show before that or after the weekend.
+        if (race.first - now > 15 * 24 * HOUR_MS || now > race.endsAt) return
+        if (id !in weather) repo.cachedWeather(id)?.let { weather[id] = it }
+        val have = weather[id]
+        if (have != null && now - have.fetchedAt < 3 * HOUR_MS) return
+        if (!weatherLoading.add(id)) return
+        val (lat, lon) = repo.coords(race.circuit) ?: run { weatherLoading.remove(id); return }
+        scope.launch {
+            try { weather[id] = repo.fetchWeather(id, lat, lon) } catch (e: Exception) { } finally { weatherLoading.remove(id) }
+        }
+    }
+
     init {
         Haptics.enabled = prefs.haptics
         UpdateWatch.load(this.context)
@@ -106,6 +204,8 @@ class AppState(context: Context, private val scope: CoroutineScope) {
             try { Widgets.updateAll(context) } catch (e: Exception) { }
         }
         scope.launch { try { UpdateWatch.check(context, background = false) } catch (e: Exception) { } }
+        seasonFor(System.currentTimeMillis())?.let { loadPodiums(it.year) }
+        scope.launch(Dispatchers.IO) { try { app.f1pro.work.ResultsWatch.schedule(context, seasons) } catch (e: Exception) { } }
     }
 
     var calendarLoading by mutableStateOf(false)
@@ -133,6 +233,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             try {
                 standings = repo.fetchStandings()
+                scope.launch(Dispatchers.IO) { try { Widgets.updateAll(context) } catch (e: Exception) { } }
             } catch (e: Exception) {
                 if (standings == null) standingsError = e.message ?: "Failed to load standings"
             } finally {
@@ -220,6 +321,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** Pull-to-refresh on the schedule: calendar, plus an update check like Afli. */
     fun refreshAll() {
         refreshCalendar()
+        seasonFor(System.currentTimeMillis())?.let { loadPodiums(it.year, force = true) }
         scope.launch { try { UpdateWatch.check(context, background = false, force = true) } catch (e: Exception) { } }
     }
 

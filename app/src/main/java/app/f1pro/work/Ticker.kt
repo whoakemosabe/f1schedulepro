@@ -53,6 +53,7 @@ object Ticker {
         val app = context.applicationContext
         val seasons = Repo(app).seasons()
         try { Alerts.fireDue(app, seasons) } catch (e: Exception) { }
+        try { ResultsWatch.schedule(app, seasons) } catch (e: Exception) { }
         try { Widgets.updateAll(app) } catch (e: Exception) { }
         schedule(app)
     }

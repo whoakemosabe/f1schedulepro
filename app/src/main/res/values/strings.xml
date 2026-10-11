@@ -4,4 +4,6 @@
     <string name="widget_next_desc">Countdown to the next F1 session</string>
     <string name="widget_weekend_name">Race weekend</string>
     <string name="widget_weekend_desc">Every session of this race weekend</string>
+    <string name="widget_driver_name">Your driver</string>
+    <string name="widget_driver_desc">Your favourite driver\'s championship position</string>
 </resources>

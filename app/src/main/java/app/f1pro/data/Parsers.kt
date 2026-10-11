@@ -30,6 +30,8 @@ data class CircuitStats(
     val type: String,
     val night: Boolean,
     val wiki: String,
+    val lat: Double? = null,
+    val lon: Double? = null,
 )
 
 data class LapRecord(val time: String, val driver: String, val year: Int, val driverUrl: String)
@@ -64,6 +66,8 @@ object Parsers {
                 name = c.optString("circuitName"),
                 locality = loc?.optString("locality").orEmpty(),
                 country = loc?.optString("country").orEmpty(),
+                lat = loc?.optString("lat")?.toDoubleOrNull(),
+                lon = loc?.optString("long")?.toDoubleOrNull(),
             )
             val sessions = ArrayList<Session>()
             for ((key, name) in SESSION_KEYS) {
@@ -162,6 +166,8 @@ object Parsers {
                 type = c.optString("type"),
                 night = c.optBoolean("night"),
                 wiki = c.optString("wiki"),
+                lat = if (c.has("lat")) c.optDouble("lat") else null,
+                lon = if (c.has("lon")) c.optDouble("lon") else null,
             )
         }
         return out
@@ -319,5 +325,136 @@ object Parsers {
             }
         }
         return decoded.replace(Regex("\\s+"), " ").trim()
+    }
+}
+
+/** Results, podiums and weather: also pure, also JVM-testable. */
+object ResultParsers {
+    private fun races(json: String): JSONArray? =
+        JSONObject(json).optJSONObject("MRData")?.optJSONObject("RaceTable")?.optJSONArray("Races")
+
+    private fun int(o: JSONObject, key: String): Int? = o.optString(key).trim().toIntOrNull()
+
+    private fun str(o: JSONObject?, key: String): String? =
+        o?.optString(key)?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
+
+    /** Race or sprint classification ([key] "Results" or "SprintResults"). */
+    fun race(json: String, key: String = "Results"): List<RaceResult> {
+        val r = races(json)?.optJSONObject(0)?.optJSONArray(key) ?: return emptyList()
+        return (0 until r.length()).map { i ->
+            val o = r.getJSONObject(i)
+            val d = o.optJSONObject("Driver") ?: JSONObject()
+            val c = o.optJSONObject("Constructor") ?: JSONObject()
+            val fl = o.optJSONObject("FastestLap")
+            RaceResult(
+                position = int(o, "position"),
+                positionText = o.optString("positionText"),
+                number = o.optString("number"),
+                code = d.optString("code").ifBlank { d.optString("familyName").take(3).uppercase() },
+                givenName = d.optString("givenName"),
+                familyName = d.optString("familyName"),
+                nationality = d.optString("nationality"),
+                constructorId = c.optString("constructorId"),
+                constructorName = c.optString("name"),
+                grid = int(o, "grid"),
+                laps = int(o, "laps") ?: 0,
+                status = o.optString("status"),
+                time = str(o.optJSONObject("Time"), "time"),
+                points = o.optString("points").toDoubleOrNull() ?: 0.0,
+                fastestRank = fl?.let { int(it, "rank") },
+                fastestLap = str(fl?.optJSONObject("Time"), "time"),
+            )
+        }.sortedBy { it.position ?: Int.MAX_VALUE }
+    }
+
+    fun qualifying(json: String): List<QualiResult> {
+        val r = races(json)?.optJSONObject(0)?.optJSONArray("QualifyingResults") ?: return emptyList()
+        return (0 until r.length()).map { i ->
+            val o = r.getJSONObject(i)
+            val d = o.optJSONObject("Driver") ?: JSONObject()
+            val c = o.optJSONObject("Constructor") ?: JSONObject()
+            QualiResult(
+                position = int(o, "position"),
+                number = o.optString("number"),
+                code = d.optString("code").ifBlank { d.optString("familyName").take(3).uppercase() },
+                givenName = d.optString("givenName"),
+                familyName = d.optString("familyName"),
+                constructorId = c.optString("constructorId"),
+                constructorName = c.optString("name"),
+                q1 = str(o, "Q1"),
+                q2 = str(o, "Q2"),
+                q3 = str(o, "Q3"),
+            )
+        }.sortedBy { it.position ?: Int.MAX_VALUE }
+    }
+
+    /**
+     * One season's podiums from the three position-filtered feeds (/results/1, /2, /3):
+     * round → [P1, P2, P3] (fewer while a race is still being classified).
+     */
+    fun podiums(jsons: List<String>): Map<Int, List<PodiumEntry>> {
+        val out = HashMap<Int, MutableList<PodiumEntry>>()
+        for (json in jsons) {
+            val rs = try { races(json) } catch (e: Exception) { null } ?: continue
+            for (i in 0 until rs.length()) {
+                val race = rs.getJSONObject(i)
+                val round = int(race, "round") ?: continue
+                val res = race.optJSONArray("Results") ?: continue
+                for (j in 0 until res.length()) {
+                    val o = res.getJSONObject(j)
+                    val pos = int(o, "position") ?: continue
+                    if (pos !in 1..3) continue
+                    val d = o.optJSONObject("Driver") ?: JSONObject()
+                    out.getOrPut(round) { ArrayList() } += PodiumEntry(
+                        pos,
+                        d.optString("code").ifBlank { d.optString("familyName").take(3).uppercase() },
+                        d.optString("familyName"),
+                        o.optJSONObject("Constructor")?.optString("constructorId").orEmpty(),
+                    )
+                }
+            }
+        }
+        return out.mapValues { (_, v) -> v.distinctBy { it.position }.sortedBy { it.position } }
+    }
+
+    /** Open-Meteo forecast with timezone=auto: times are the track's local time plus an offset. */
+    fun forecast(json: String, now: Long): Forecast {
+        val o = JSONObject(json)
+        val offset = o.optInt("utc_offset_seconds", 0).toLong() * 1000
+        val hours = ArrayList<WeatherHour>()
+        o.optJSONObject("hourly")?.let { h ->
+            val t = h.optJSONArray("time") ?: JSONArray()
+            val temp = h.optJSONArray("temperature_2m")
+            val rain = h.optJSONArray("precipitation_probability")
+            val code = h.optJSONArray("weather_code")
+            val wind = h.optJSONArray("wind_speed_10m")
+            for (i in 0 until t.length()) {
+                val local = try { java.time.LocalDateTime.parse(t.getString(i)) } catch (e: Exception) { continue }
+                val ms = local.toInstant(ZoneOffset.UTC).toEpochMilli() - offset
+                val tc = temp?.optDouble(i)?.takeIf { !it.isNaN() } ?: continue
+                hours += WeatherHour(
+                    time = ms,
+                    tempC = tc,
+                    rainChance = rain?.let { if (it.isNull(i)) null else it.optInt(i) },
+                    code = code?.optInt(i) ?: 3,
+                    windKmh = wind?.optDouble(i)?.takeIf { !it.isNaN() },
+                )
+            }
+        }
+        val days = ArrayList<WeatherDay>()
+        o.optJSONObject("daily")?.let { d ->
+            val t = d.optJSONArray("time") ?: JSONArray()
+            val max = d.optJSONArray("temperature_2m_max")
+            val min = d.optJSONArray("temperature_2m_min")
+            val rain = d.optJSONArray("precipitation_probability_max")
+            val code = d.optJSONArray("weather_code")
+            for (i in 0 until t.length()) {
+                val date = try { LocalDate.parse(t.getString(i)) } catch (e: Exception) { continue }
+                val hi = max?.optDouble(i)?.takeIf { !it.isNaN() } ?: continue
+                val lo = min?.optDouble(i)?.takeIf { !it.isNaN() } ?: continue
+                days += WeatherDay(date, hi, lo, rain?.let { if (it.isNull(i)) null else it.optInt(i) }, code?.optInt(i) ?: 3)
+            }
+        }
+        return Forecast(hours, days, now, offset)
     }
 }

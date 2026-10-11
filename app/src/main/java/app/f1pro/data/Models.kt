@@ -9,6 +9,8 @@ data class Circuit(
     val name: String,
     val locality: String,
     val country: String,
+    val lat: Double? = null,
+    val lon: Double? = null,
 ) {
     val countryCode: String get() = Countries.code(country)
     val flag: String get() = Countries.flag(countryCode)
@@ -138,3 +140,146 @@ data class NewsItem(
     val excerpt: String,
     val source: String,
 )
+
+// ── Results (Jolpica) ──
+
+data class RaceResult(
+    val position: Int?,
+    val positionText: String,
+    val number: String,
+    val code: String,
+    val givenName: String,
+    val familyName: String,
+    val nationality: String,
+    val constructorId: String,
+    val constructorName: String,
+    val grid: Int?,
+    val laps: Int,
+    val status: String,
+    val time: String?,
+    val points: Double,
+    val fastestRank: Int?,
+    val fastestLap: String?,
+) {
+    val name: String get() = "$givenName $familyName"
+
+    /** "+2.307", the winner's race time, "+1 Lap", or why they stopped ("Retired"). */
+    val gap: String get() = time ?: status
+
+    /** Places gained (+) or lost (−) from the grid; null for a pit-lane start or no grid. */
+    val gained: Int? get() = if (grid != null && grid > 0 && position != null) grid - position else null
+
+    /** Didn't see the flag: retired, disqualified, didn't start. */
+    val out: Boolean get() = time == null && !status.startsWith("+") && status != "Finished" && !status.contains("Lap")
+}
+
+data class QualiResult(
+    val position: Int?,
+    val number: String,
+    val code: String,
+    val givenName: String,
+    val familyName: String,
+    val constructorId: String,
+    val constructorName: String,
+    val q1: String?,
+    val q2: String?,
+    val q3: String?,
+) {
+    val name: String get() = "$givenName $familyName"
+    val best: String? get() = q3 ?: q2 ?: q1
+    val part: String get() = when { q3 != null -> "Q3"; q2 != null -> "Q2"; q1 != null -> "Q1"; else -> "" }
+}
+
+/** Everything published for one weekend. Empty lists mean "not out yet". */
+data class WeekendResults(
+    val season: Int,
+    val round: Int,
+    val race: List<RaceResult>,
+    val sprint: List<RaceResult>,
+    val quali: List<QualiResult>,
+    val fetchedAt: Long,
+) {
+    val isEmpty: Boolean get() = race.isEmpty() && sprint.isEmpty() && quali.isEmpty()
+}
+
+data class PodiumEntry(val position: Int, val code: String, val familyName: String, val constructorId: String)
+
+// ── Weather (Open-Meteo) ──
+
+enum class Sky { CLEAR, PARTLY, CLOUDY, FOG, DRIZZLE, RAIN, SNOW, STORM }
+
+data class WeatherHour(val time: Long, val tempC: Double, val rainChance: Int?, val code: Int, val windKmh: Double?) {
+    val sky: Sky get() = Wmo.sky(code)
+}
+
+data class WeatherDay(val date: java.time.LocalDate, val maxC: Double, val minC: Double, val rainChance: Int?, val code: Int) {
+    val sky: Sky get() = Wmo.sky(code)
+}
+
+data class Forecast(
+    val hours: List<WeatherHour>,
+    val days: List<WeatherDay>,
+    val fetchedAt: Long,
+    /** The track's offset from UTC, for turning session times into its local dates. */
+    val offsetMs: Long = 0,
+) {
+    fun localDate(ms: Long): java.time.LocalDate =
+        java.time.Instant.ofEpochMilli(ms + offsetMs).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+
+    /** The forecast hour nearest to [ms], if the forecast reaches that far. */
+    fun at(ms: Long): WeatherHour? =
+        hours.minByOrNull { kotlin.math.abs(it.time - ms) }?.takeIf { kotlin.math.abs(it.time - ms) <= 90 * MIN_MS }
+
+    fun day(date: java.time.LocalDate): WeatherDay? = days.firstOrNull { it.date == date }
+}
+
+/** WMO weather codes, as Open-Meteo reports them. */
+object Wmo {
+    fun sky(code: Int): Sky = when (code) {
+        0 -> Sky.CLEAR
+        1, 2 -> Sky.PARTLY
+        3 -> Sky.CLOUDY
+        45, 48 -> Sky.FOG
+        51, 53, 55, 56, 57 -> Sky.DRIZZLE
+        61, 63, 65, 66, 67, 80, 81, 82 -> Sky.RAIN
+        71, 73, 75, 77, 85, 86 -> Sky.SNOW
+        95, 96, 99 -> Sky.STORM
+        else -> Sky.CLOUDY
+    }
+
+    fun label(sky: Sky): String = when (sky) {
+        Sky.CLEAR -> "Clear"
+        Sky.PARTLY -> "Partly cloudy"
+        Sky.CLOUDY -> "Cloudy"
+        Sky.FOG -> "Fog"
+        Sky.DRIZZLE -> "Drizzle"
+        Sky.RAIN -> "Rain"
+        Sky.SNOW -> "Snow"
+        Sky.STORM -> "Thunderstorms"
+    }
+
+    fun wet(sky: Sky): Boolean = sky == Sky.DRIZZLE || sky == Sky.RAIN || sky == Sky.STORM || sky == Sky.SNOW
+}
+
+// ── Favourite driver ──
+
+/** The driver picked in Settings, matched across feeds by name (ids differ between sources). */
+data class Favourite(val givenName: String, val familyName: String, val teamId: String, val teamName: String) {
+    val name: String get() = "$givenName $familyName"
+
+    fun matches(given: String, family: String): Boolean {
+        if (Names.norm(family) != Names.norm(familyName)) return false
+        val a = Names.norm(given)
+        val b = Names.norm(givenName)
+        return a == b || a.startsWith(b) || b.startsWith(a) || a.isEmpty() || b.isEmpty()
+    }
+}
+
+object Names {
+    /** "Hülkenberg" → "hulkenberg", "Andrea Kimi" → "andreakimi". */
+    fun norm(s: String): String =
+        java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .lowercase()
+            .filter { it.isLetter() }
+}

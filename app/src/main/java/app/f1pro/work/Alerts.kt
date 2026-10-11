@@ -24,6 +24,7 @@ import app.f1pro.data.Slot
 object Alerts {
     private const val CH_SESSIONS = "sessions"
     private const val CH_UPDATES = "updates"
+    private const val CH_RESULTS = "results"
     const val EXTRA_RACE = "race_key"
     const val EXTRA_OPEN_UPDATES = "open_updates"
 
@@ -35,6 +36,11 @@ object Alerts {
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 200, 100, 200)
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CH_RESULTS, "Your driver's results", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "How your favourite driver did in qualifying, sprints and races"
             }
         )
         nm.createNotificationChannel(
@@ -83,6 +89,12 @@ object Alerts {
         }
         val text = "${slot.race.circuit.flag}  ${slot.race.name} · ${fmt.time(slot.session.start)} ${fmt.abbr(slot.session.start)}"
         post(context, CH_SESSIONS, slot.key.hashCode(), title, text, slot.race.key)
+    }
+
+    /** "Antonelli finished P2 in the Singapore GP" — once per session. Tapping opens the race. */
+    fun postResult(context: Context, key: String, title: String, text: String, raceKey: String) {
+        createChannels(context)
+        post(context, CH_RESULTS, ("result-" + key).hashCode(), title, text, raceKey)
     }
 
     /** One quiet notification when a new version is out. */

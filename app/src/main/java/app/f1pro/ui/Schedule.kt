@@ -89,6 +89,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
             ?: races.lastIndex
     }
     val globalNext = remember(state.seasons, now) { Planner.next(state.seasons, now) }
+    LaunchedEffect(season?.year) { season?.year?.let { state.loadPodiums(it) } }
 
     val sel = selected
     if (sel != null && sel in races.indices) {
@@ -159,6 +160,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
                 race = race,
                 status = status,
                 stats = state.circuits[race.circuit.id],
+                podium = state.podiums[race.season]?.get(race.round),
                 now = now,
                 isNext = i == highlighted && status == RaceStatus.UPCOMING,
                 onClick = { selected = i },
@@ -188,6 +190,7 @@ private fun RaceCard(
     race: Race,
     status: RaceStatus,
     stats: CircuitStats?,
+    podium: List<app.f1pro.data.PodiumEntry>?,
     now: Long,
     isNext: Boolean,
     onClick: () -> Unit,
@@ -212,7 +215,7 @@ private fun RaceCard(
     Row(
         Modifier
             .fillMaxWidth()
-            .alpha(if (status == RaceStatus.COMPLETED) 0.45f else 1f)
+            .alpha(if (status == RaceStatus.COMPLETED) (if (podium.isNullOrEmpty()) 0.45f else 0.6f) else 1f)
             .then(if (ring != null) Modifier.border(1.dp, ring, CardShape) else Modifier)
             .glassCard(edge)
             .pressable(onClick)
@@ -240,6 +243,7 @@ private fun RaceCard(
                 val t = stats?.type?.let { typeShort(it) }.orEmpty()
                 if (t.isNotEmpty()) Text(" · $t", style = inter(12.sp, color = C.TextMuted))
             }
+            if (status == RaceStatus.COMPLETED && !podium.isNullOrEmpty()) PodiumLine(podium)
             if (status == RaceStatus.ACTIVE) {
                 Row(Modifier.padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     for (s in race.sessions) Dot(if (s.start < now) C.Success else C.BorderLight, 6.dp)
@@ -384,6 +388,12 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
         RaceStatus.ACTIVE -> C.Live
         RaceStatus.UPCOMING -> C.Highlight
     }
+    LaunchedEffect(race.key) {
+        state.loadWeather(race)
+        if (!race.isTesting && status != RaceStatus.UPCOMING) state.loadResults(race)
+    }
+    val forecast = state.weather[race.circuit.id]?.takeIf { status != RaceStatus.COMPLETED }
+    val raceResults = state.results[race.key]?.race.orEmpty()
 
     Column(
         Modifier
@@ -428,6 +438,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
             }
 
             when {
+                status == RaceStatus.COMPLETED && raceResults.isNotEmpty() -> PodiumBlock(raceResults, state.favourite)
                 status == RaceStatus.COMPLETED -> StatusBox(C.Success.copy(alpha = 0.2f), null) {
                     Ic(R.drawable.lc_circle_check, C.Success, 32.dp)
                     Text(if (race.isTesting) "TESTING COMPLETE" else "RACE COMPLETE", style = orbitron(13.sp, FontWeight.Bold, C.Success, 0.1f))
@@ -507,6 +518,9 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
             }
         }
 
+        if (!race.isTesting && status != RaceStatus.UPCOMING) ResultsCard(state, race, now)
+        if (forecast != null) WeatherCard(state, race, forecast)
+
         // Sessions
         Column(Modifier.fillMaxWidth().glassCard(C.Highlight.copy(alpha = 0.4f))) {
             Row(
@@ -585,7 +599,11 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?) {
                         )
                         Text(fmt.date(s.start), style = inter(11.sp, color = C.TextMuted))
                     }
-                    if (!isPast && !isLive) {
+                    val wh = if (!isPast && !s.tbc) forecast?.at(s.start) else null
+                    if (wh != null) {
+                        Spacer(Modifier.width(10.dp))
+                        WeatherChip(state, wh)
+                    } else if (!isPast && !isLive) {
                         Spacer(Modifier.width(8.dp))
                         Ic(R.drawable.lc_clock, C.TextMuted.copy(alpha = 0.3f), 13.dp)
                     }

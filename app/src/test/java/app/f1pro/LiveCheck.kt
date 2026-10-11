@@ -41,6 +41,26 @@ class LiveCheck {
             val teams = Parsers.teams(Net.get("${Repo.F1API}/constructors-championship"))
             line(teams.isNotEmpty(), "Constructors: ${teams.size} teams")
         } catch (e: Exception) { line(false, "Constructors: ${e.message}") }
+        try {
+            val raw = (1..3).map { Net.get("${Repo.JOLPICA}/$year/results/$it.json?limit=40") }
+            val p = app.f1pro.data.ResultParsers.podiums(raw)
+            val last = p.keys.maxOrNull()
+            line(p.isNotEmpty(), "Podiums $year: ${p.size} races" + (last?.let { r -> ", R$r: " + p[r]!!.joinToString(" ") { "${it.position}.${it.code}" } } ?: ""))
+            if (last != null) {
+                val r = app.f1pro.data.ResultParsers.race(Net.get("${Repo.JOLPICA}/$year/$last/results.json?limit=40"))
+                val q = app.f1pro.data.ResultParsers.qualifying(Net.get("${Repo.JOLPICA}/$year/$last/qualifying.json?limit=40"))
+                line(r.isNotEmpty() && q.isNotEmpty(), "Results R$last: ${r.size} classified, ${q.size} in qualifying")
+                val after = app.f1pro.data.Report.standingsAfter(Net.get("${Repo.JOLPICA}/$year/$last/driverStandings.json"))
+                line(after != null, "Standings after R$last: ${after?.second?.firstOrNull()?.familyName ?: "—"} leads")
+            }
+        } catch (e: Exception) { line(false, "Results: ${e.message}") }
+        try {
+            val f = app.f1pro.data.ResultParsers.forecast(
+                Net.get("https://api.open-meteo.com/v1/forecast?latitude=30.1328&longitude=-97.6411&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16"),
+                now,
+            )
+            line(f.hours.size > 300 && f.days.size >= 14, "Weather (Austin): ${f.hours.size} hours, ${f.days.size} days")
+        } catch (e: Exception) { line(false, "Weather: ${e.message}") }
         for (src in Repo.NEWS) {
             try {
                 val items = Parsers.rss(Net.get(src.url, "application/rss+xml, application/xml, text/xml"), src.name)

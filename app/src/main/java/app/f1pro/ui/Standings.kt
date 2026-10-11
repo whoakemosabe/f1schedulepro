@@ -62,6 +62,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
     var view by remember { mutableStateOf(state.prefs.standingsView) }
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val st = state.standings
+    val fav = state.favourite
     val now = rememberNow(60_000)
     val calendarYear = remember(state.seasons, now) { state.seasonFor(now)?.year }
     val hv = androidx.compose.ui.platform.LocalView.current
@@ -110,6 +111,11 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 }
             }
 
+            val favRow = fav?.let { f -> st?.drivers?.firstOrNull { f.matches(it.name, it.surname) } }
+            if (fav != null) {
+                item { FavouriteCard(fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) { state.tab = Tab.Settings } }
+            }
+
             item {
                 SlidingSegments(
                     listOf("DRIVERS", "CONSTRUCTORS"),
@@ -143,13 +149,13 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
                 view == "drivers" -> {
                     val leader = st.drivers.firstOrNull()?.points ?: 0.0
                     items(st.drivers, key = { "d-" + it.surname + it.position }) { d ->
-                        DriverRow(d, leader) { openUrl(context, it) }
+                        DriverRow(d, leader, fav?.matches(d.name, d.surname) == true) { openUrl(context, it) }
                     }
                 }
                 else -> {
                     val leader = st.teams.firstOrNull()?.points ?: 0.0
                     items(st.teams, key = { "t-" + it.teamId }) { t ->
-                        TeamCard(t, st.drivers.filter { it.teamId == t.teamId }, leader) { openUrl(context, it) }
+                        TeamCard(t, st.drivers.filter { it.teamId == t.teamId }, leader, fav) { openUrl(context, it) }
                     }
                 }
             }
@@ -168,13 +174,14 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
 }
 
 @Composable
-private fun DriverRow(d: DriverStanding, leader: Double, open: (String) -> Unit) {
+private fun DriverRow(d: DriverStanding, leader: Double, isFav: Boolean, open: (String) -> Unit) {
     val color = Color(Teams.color(d.teamId))
     val behind = if (d.points < leader) leader - d.points else 0.0
     Row(
         Modifier
             .fillMaxWidth()
-            .glassCard()
+            .then(if (isFav) Modifier.border(1.dp, color.copy(alpha = 0.55f), CardShape) else Modifier)
+            .glassCard(fill = if (isFav) androidx.compose.ui.graphics.lerp(C.Card, color, 0.1f) else C.Card)
             .leftEdge(color)
             .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -207,10 +214,17 @@ private fun DriverRow(d: DriverStanding, leader: Double, open: (String) -> Unit)
 }
 
 @Composable
-private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Double, open: (String) -> Unit) {
+private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Double, fav: app.f1pro.data.Favourite?, open: (String) -> Unit) {
     val color = Color(Teams.color(t.teamId))
     val behind = if (t.points < leader) leader - t.points else 0.0
-    Column(Modifier.fillMaxWidth().glassCard().leftEdge(color)) {
+    val favTeam = fav != null && fav.teamId == t.teamId
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(if (favTeam) Modifier.border(1.dp, color.copy(alpha = 0.55f), CardShape) else Modifier)
+            .glassCard(fill = if (favTeam) androidx.compose.ui.graphics.lerp(C.Card, color, 0.08f) else C.Card)
+            .leftEdge(color)
+    ) {
         Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -239,5 +253,47 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
                 Text(Fmt.points(d.points), style = inter(13.sp, FontWeight.SemiBold, C.Text))
             }
         }
+    }
+}
+
+/** "Your driver" at the top of Standings: position, points, gap and wins. */
+@Composable
+private fun FavouriteCard(
+    fav: app.f1pro.data.Favourite,
+    row: DriverStanding?,
+    leader: DriverStanding?,
+    second: DriverStanding?,
+    onChange: () -> Unit,
+) {
+    val color = Color(Teams.color(row?.teamId ?: fav.teamId))
+    val shape = CardShape
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(color.copy(alpha = 0.16f), color.copy(alpha = 0.02f))))
+            .border(1.dp, color.copy(alpha = 0.4f), shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Ic(R.drawable.lc_star, color, 24.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("YOUR DRIVER", style = inter(11.sp, FontWeight.SemiBold, C.TextMuted, 0.08f))
+            Text(fav.name, style = inter(15.sp, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val line = if (row == null) {
+                "Not in this season's standings"
+            } else {
+                val gap = when {
+                    row.position == 1 && second != null -> " · leads by ${Fmt.points(row.points - second.points)}"
+                    leader != null && row.position != 1 -> " · ${Fmt.points(leader.points - row.points)} behind"
+                    else -> ""
+                }
+                "${Teams.shortName(row.teamName)} · P${row.position} · ${Fmt.points(row.points)} pts$gap"
+            }
+            Text(line, style = inter(12.sp, FontWeight.Medium, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Chip("Change", onClick = onChange)
     }
 }

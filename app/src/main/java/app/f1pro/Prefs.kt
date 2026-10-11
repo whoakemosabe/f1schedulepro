@@ -47,9 +47,44 @@ class Prefs(context: Context) {
         get() = p.getString("theme", "dark") ?: "dark"
         set(v) = p.edit().putString("theme", v).apply()
 
+    var fahrenheit: Boolean
+        get() = p.getBoolean("fahrenheit", false)
+        set(v) = p.edit().putBoolean("fahrenheit", v).apply()
+
     var haptics: Boolean
         get() = p.getBoolean("haptics", true)
         set(v) = p.edit().putBoolean("haptics", v).apply()
+
+    // ── Favourite driver ──
+
+    /** The favourite driver, or null. Stored by name: driver ids differ between the feeds. */
+    var favourite: app.f1pro.data.Favourite?
+        get() {
+            val family = p.getString("fav_family", "") ?: ""
+            if (family.isBlank()) return null
+            return app.f1pro.data.Favourite(
+                p.getString("fav_given", "") ?: "",
+                family,
+                p.getString("fav_team_id", "") ?: "",
+                p.getString("fav_team_name", "") ?: "",
+            )
+        }
+        set(v) = p.edit()
+            .putString("fav_given", v?.givenName ?: "")
+            .putString("fav_family", v?.familyName ?: "")
+            .putString("fav_team_id", v?.teamId ?: "")
+            .putString("fav_team_name", v?.teamName ?: "")
+            .apply()
+
+    /** Tell me how my driver did after qualifying, sprints and races. */
+    var resultAlerts: Boolean
+        get() = p.getBoolean("result_alerts", true)
+        set(v) = p.edit().putBoolean("result_alerts", v).apply()
+
+    /** Session keys whose result has been reported, so each is sent once. */
+    var reported: Set<String>
+        get() = p.getStringSet("reported", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("reported", v.toSortedSet().toList().takeLast(150).toSet()).apply()
 
     // ── Updates ──
 
