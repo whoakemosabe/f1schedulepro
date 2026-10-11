@@ -50,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -647,10 +648,18 @@ private fun ColumnScope.TeamPanel(state: AppState, st: Standings, t: TeamStandin
         }
     }
 
-    val lines = pair.indices.mapNotNull { i -> seasons[i]?.let { it to (if (i == 0) color else second) } }
+    val shown = pair.indices.filter { seasons[it] != null }
+    val lines = shown.map { i -> seasons[i]!! to (if (i == 0) color else second) }
     if (lines.isNotEmpty() && lines.any { it.first.rounds.isNotEmpty() }) {
         PanelLabel("FORM · ${st.season}")
-        FormChart(lines)
+        FormChart(lines, shown.map { pair[it].surname })
+        val missing = pair.indices.filter { seasons[it] == null }.map { pair[it].surname }
+        if (missing.isNotEmpty() && pair.none { state.driverSeasonLoading[state.driverKey(st.season, it)] == true }) {
+            Text("No race results for ${missing.joinToString(" or ")} this season.", style = inter(11.sp, color = C.TextMuted))
+        }
+    } else if (pair.any { state.driverSeasonLoading[state.driverKey(st.season, it)] == true }) {
+        PanelLabel("FORM · ${st.season}")
+        Skeleton(150.dp)
     }
     if (pair.size == 2) {
         PanelLabel("HEAD TO HEAD")
@@ -911,8 +920,8 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
         if (names.size > 1) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 lines.forEachIndexed { i, (_, c) ->
-                    Box(Modifier.size(10.dp).clip(RoundedCornerShape(50)).background(c))
-                    Text(" " + names.getOrElse(i) { "" } + "   ", style = inter(11.sp, color = C.TextSecondary))
+                    LineSwatch(c, dashed = i > 0)
+                    Text(" " + names.getOrElse(i) { "" } + "    ", style = inter(11.sp, FontWeight.Medium, C.TextSecondary))
                 }
             }
         }
@@ -942,20 +951,27 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
                 for (p in listOf(1, (worst + 1) / 2, worst)) drawLine(grid, Offset(pad, y(p)), Offset(pad + w, y(p)), 1.dp.toPx())
                 sel?.let { drawLine(guide.copy(alpha = 0.5f), Offset(x(it), pad), Offset(x(it), pad + h), 1.dp.toPx()) }
                 clipRect(right = pad + w * progress.value + 8.dp.toPx()) {
-                    for ((season, color) in lines) {
+                    lines.forEachIndexed { index, (season, color) ->
+                        // The second driver's line is dashed with hollow dots, so two drivers in
+                        // the same team colour stay apart even where their lines cross.
+                        val dashed = index > 0
+                        val stroke = Stroke(
+                            2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                            pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx())) else null,
+                        )
                         // Line through finishes; a retirement breaks it.
                         var path = Path()
                         var started = false
                         for (r in season.rounds) {
                             val f = r.finish
                             if (f == null) {
-                                if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                                if (started) drawPath(path, color.copy(alpha = 0.85f), style = stroke)
                                 path = Path(); started = false
                                 continue
                             }
                             if (!started) { path.moveTo(x(r.round), y(f)); started = true } else path.lineTo(x(r.round), y(f))
                         }
-                        if (started) drawPath(path, color.copy(alpha = 0.8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        if (started) drawPath(path, color.copy(alpha = 0.85f), style = stroke)
                         for (r in season.rounds) {
                             val f = r.finish
                             val picked = r.round == sel
@@ -965,8 +981,11 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
                                 drawLine(dnf, Offset(cx - k, cy + k), Offset(cx + k, cy - k), 2.dp.toPx())
                             } else {
                                 val big = f <= 3 || picked
-                                drawCircle(ring, (if (picked) 7.dp else if (big) 5.5.dp else 3.5.dp).toPx(), Offset(x(r.round), y(f)))
-                                drawCircle(color, (if (picked) 5.5.dp else if (big) 4.5.dp else 2.5.dp).toPx(), Offset(x(r.round), y(f)))
+                                val at = Offset(x(r.round), y(f))
+                                drawCircle(ring, (if (picked) 7.dp else if (big) 5.5.dp else 3.5.dp).toPx(), at)
+                                drawCircle(color, (if (picked) 5.5.dp else if (big) 4.5.dp else 2.5.dp).toPx(), at)
+                                // Hollow for the second driver.
+                                if (dashed) drawCircle(ring, (if (picked) 3.dp else if (big) 2.5.dp else 1.2.dp).toPx(), at)
                             }
                         }
                     }
@@ -996,10 +1015,25 @@ private fun FormChart(lines: List<Pair<DriverSeason, Color>>, names: List<String
                         " · ${Fmt.points(r.allPoints)} pts" + (if (r.fastestRank == 1) " · fastest lap" else "")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(c))
+                    LineSwatch(c, dashed = i > 0)
                     Text("  $text", style = inter(12.sp, color = if (r?.finish == null) C.Live else C.TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+    }
+}
+
+/** A short sample of a chart line (solid, or dashed for the second driver) for keys. */
+@Composable
+private fun LineSwatch(color: Color, dashed: Boolean) {
+    val ring = C.Surface
+    Canvas(Modifier.size(width = 18.dp, height = 10.dp)) {
+        val y = size.height / 2
+        drawLine(
+            color, Offset(0f, y), Offset(size.width, y), 2.dp.toPx(), cap = StrokeCap.Round,
+            pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())) else null,
+        )
+        drawCircle(color, 3.dp.toPx(), Offset(size.width / 2, y))
+        if (dashed) drawCircle(ring, 1.5.dp.toPx(), Offset(size.width / 2, y))
     }
 }
