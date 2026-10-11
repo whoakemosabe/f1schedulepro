@@ -105,6 +105,14 @@ object DriverStats {
     fun findId(entries: List<Entry>, given: String, family: String): String? =
         entries.firstOrNull { Favourite(given, family, "", "").matches(it.given, it.family) }?.id
             ?: entries.filter { Names.norm(it.family) == Names.norm(family) }.singleOrNull()?.id
+            // Feeds split names differently ("Andrea" + "Kimi Antonelli" vs "Andrea Kimi" +
+            // "Antonelli"): compare the whole name, then the last word of the surname.
+            ?: entries.firstOrNull { Names.norm(it.given + it.family) == Names.norm(given + family) }?.id
+            ?: entries.filter { Names.norm(it.family) == Names.norm(family.trim().substringAfterLast(' ')) }.singleOrNull()?.id
+
+    /** The season data's id for a standings row: the feed's own id when it's there, else by name. */
+    fun idFor(entries: List<Entry>, d: DriverStanding): String? =
+        d.driverId?.takeIf { id -> entries.any { it.id == id } } ?: findId(entries, d.name, d.surname)
 
     private fun races(json: String?): JSONArray? =
         if (json.isNullOrBlank()) null
@@ -412,16 +420,24 @@ object DriverStats {
         else -> url
     }
 
-    /** Family name (normalised) → official headshot URL, from OpenF1's /drivers. */
+    /**
+     * Official headshot URLs from OpenF1's /drivers, keyed two ways: by the three-letter code
+     * ("ANT", the safest) and by family name (normalised).
+     */
     fun headshots(openF1Json: String): Map<String, String> {
         val arr = try { JSONArray(openF1Json) } catch (e: Exception) { return emptyMap() }
         val out = HashMap<String, String>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val url = o.optString("headshot_url").trim()
-            val last = o.optString("last_name").trim()
-            if (url.startsWith("https://") && last.isNotBlank()) out[Names.norm(last)] = url
+            if (!url.startsWith("https://")) continue
+            o.optString("name_acronym").trim().takeIf { it.length == 3 }?.let { out[it.uppercase()] = url }
+            o.optString("last_name").trim().takeIf { it.isNotBlank() }?.let { out[Names.norm(it)] = url }
         }
         return out
     }
+
+    /** A standings driver's headshot: by code, then surname, then the surname's last word. */
+    fun headshotFor(heads: Map<String, String>, d: DriverStanding): String? =
+        heads[d.code] ?: heads[Names.norm(d.surname)] ?: heads[Names.norm(d.surname.trim().substringAfterLast(' '))]
 }

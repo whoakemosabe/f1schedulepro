@@ -68,6 +68,14 @@ class LiveCheck {
             val short = all.drivers.values.filter { it.rounds.size < rounds }.map { it.driverId }
             line(all.drivers.size >= 20, "Season data $year: ${r.size + q.size + sp.size} requests, ${all.drivers.size} drivers, $rounds rounds" +
                 (if (short.isNotEmpty()) " (fewer for ${short.joinToString(", ")})" else ""))
+            // Every driver in the standings must find their season data and a photo.
+            val (_, standing) = Parsers.drivers(Net.get("${Repo.F1API}/drivers-championship"))
+            val heads = app.f1pro.data.DriverStats.headshots(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
+            val noData = standing.filter { d -> app.f1pro.data.DriverStats.idFor(all.entries, d)?.let { all.drivers[it] } == null }.map { it.code }
+            val noPhoto = standing.filter { app.f1pro.data.DriverStats.headshotFor(heads, it) == null }.map { it.code }
+            line(noData.isEmpty() && noPhoto.isEmpty(), "Every driver matched: ${standing.size} in standings" +
+                (if (noData.isNotEmpty()) "; no season data for ${noData.joinToString(", ")}" else "") +
+                (if (noPhoto.isNotEmpty()) "; no photo for ${noPhoto.joinToString(", ")}" else ""))
         } catch (e: Exception) { line(false, "Season data: ${e.message}") }
         try {
             // The driver panel: the standings leader's season, round by round, and vs teammate.

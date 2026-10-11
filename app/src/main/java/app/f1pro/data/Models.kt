@@ -116,6 +116,8 @@ data class DriverStanding(
     val teamName: String,
     /** The three-letter code ("NOR"), from the feed when it has one. */
     val shortCode: String? = null,
+    /** The feed's driver id, the same one Jolpica uses ("antonelli", "max_verstappen"). */
+    val driverId: String? = null,
 ) {
     val url: String get() = Teams.driverUrl(name, surname)
 
@@ -273,11 +275,24 @@ object Wmo {
 data class Favourite(val givenName: String, val familyName: String, val teamId: String, val teamName: String) {
     val name: String get() = "$givenName $familyName"
 
+    /**
+     * Same driver? Feeds split names differently ("Andrea" + "Kimi Antonelli" in one,
+     * "Andrea Kimi" + "Antonelli" in another), so the whole name counts, and family names
+     * match on their last word too.
+     */
     fun matches(given: String, family: String): Boolean {
-        if (Names.norm(family) != Names.norm(familyName)) return false
+        if (Names.norm(given + family) == Names.norm(givenName + familyName)) return true
+        val sameFamily = Names.norm(family) == Names.norm(familyName) ||
+            Names.norm(family.trim().substringAfterLast(' ')) == Names.norm(familyName.trim().substringAfterLast(' '))
+        if (!sameFamily) return false
         val a = Names.norm(given)
         val b = Names.norm(givenName)
-        return a == b || a.startsWith(b) || b.startsWith(a) || a.isEmpty() || b.isEmpty()
+        if (a == b || a.startsWith(b) || b.startsWith(a) || a.isEmpty() || b.isEmpty()) return true
+        // "Kimi Antonelli" vs "Andrea Kimi Antonelli": every word of one name is in the other.
+        fun words(x: String) = x.split(' ', '-').map { Names.norm(it) }.filter { it.isNotEmpty() }.toSet()
+        val w1 = words("$given $family")
+        val w2 = words("$givenName $familyName")
+        return w1.containsAll(w2) || w2.containsAll(w1)
     }
 }
 

@@ -294,7 +294,7 @@ private fun counted(target: Double, from: Double = 0.0, format: (Double) -> Stri
  */
 @Composable
 private fun PhotoHeader(state: AppState, d: DriverStanding, color: Color, number: String?) {
-    val url = remember(d.surname) { state.headshotUrl(d.surname) }
+    val url = remember(d.surname, d.shortCode) { state.headshotUrl(d) }
     val context = LocalContext.current
     val shape = RoundedCornerShape(18.dp)
     val deep = lerp(color, Color.Black, 0.72f)

@@ -306,7 +306,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     /** Family name (normalised) → headshot URL, read with the rest of the saved data. */
     private var headshots: Map<String, String> = emptyMap()
 
-    fun headshotUrl(family: String): String? = headshots[app.f1pro.data.Names.norm(family)]
+    fun headshotUrl(d: app.f1pro.data.DriverStanding): String? = app.f1pro.data.DriverStats.headshotFor(headshots, d)
 
     /** The calendar's race for a season and round (for flags and opening it). */
     fun raceFor(season: Int, round: Int): app.f1pro.data.Race? =
@@ -358,7 +358,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         val st = standings ?: return
         if (st.season != season) return
         for (d in st.drivers) {
-            val id = app.f1pro.data.DriverStats.findId(stats.entries, d.name, d.surname) ?: continue
+            val id = app.f1pro.data.DriverStats.idFor(stats.entries, d) ?: continue
             stats.drivers[id]?.let { driverSeasons[driverKey(season, d)] = it }
         }
     }

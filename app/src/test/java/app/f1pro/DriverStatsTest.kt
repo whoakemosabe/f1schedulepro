@@ -3,6 +3,8 @@ package app.f1pro
 import app.f1pro.data.DriverStats
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DriverStatsTest {
@@ -189,5 +191,22 @@ class DriverStatsTest {
         assertEquals("HUL", d("Hülkenberg").code)
         assertEquals("NOR", d("Norris", "nor").code)
         assertEquals("VER", d("Verstappen", "VERS").code)
+    }
+
+    @Test
+    fun namesSplitDifferentlyStillMatch() {
+        // f1api.dev: "Andrea" + "Kimi Antonelli"; Jolpica: "Andrea Kimi" + "Antonelli".
+        val e = listOf(DriverStats.Entry("antonelli", "Andrea Kimi", "Antonelli"), DriverStats.Entry("russell", "George", "Russell"))
+        assertEquals("antonelli", DriverStats.findId(e, "Andrea", "Kimi Antonelli"))
+        val d = app.f1pro.data.DriverStanding(1, 0.0, 0, "Andrea", "Kimi Antonelli", "", "12", "mercedes", "Mercedes", "ANT", "antonelli")
+        assertEquals("antonelli", DriverStats.idFor(e, d))
+        assertEquals("ANT", d.code)
+        val heads = DriverStats.headshots("""[{"name_acronym":"ANT","last_name":"Antonelli","headshot_url":"https://x/ant.png"}]""")
+        assertEquals("https://x/ant.png", DriverStats.headshotFor(heads, d))
+        assertEquals("https://x/ant.png", DriverStats.headshotFor(heads, d.copy(shortCode = null)))
+        val fav = app.f1pro.data.Favourite("Andrea", "Kimi Antonelli", "mercedes", "Mercedes")
+        assertTrue(fav.matches("Andrea Kimi", "Antonelli"))
+        assertTrue(fav.matches("Kimi", "Antonelli"))
+        assertFalse(fav.matches("George", "Russell"))
     }
 }
