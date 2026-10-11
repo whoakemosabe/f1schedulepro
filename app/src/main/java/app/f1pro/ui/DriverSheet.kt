@@ -205,8 +205,9 @@ private fun DriverPanel(state: AppState, st: Standings, d: DriverStanding, activ
                         Highlights(season)
                     }
                     if (season != null && rivalSeason != null && rival != null && season.rounds.isNotEmpty()) {
-                        PanelLabel(if (d.position == 1) "LEAD OVER ${rival.surname.uppercase()}" else "GAP TO ${rival.surname.uppercase()}")
-                        GapChart(DriverStats.gap(season, rivalSeason), color, leader = d.position == 1, rivalName = rival.surname)
+                        PanelLabel(if (d.position == 1) "LEAD OVER ${rival.code}" else "GAP TO ${rival.code}")
+                        val rc = Color(Teams.color(rival.teamId)).let { if (rival.teamId == d.teamId) shade(it) else it }
+                        GapCard(state, st, d, rival, season, rivalSeason, color, rc)
                     }
                     if (mate != null) {
                         PanelLabel("VS TEAMMATE")
@@ -449,91 +450,158 @@ private fun Highlights(s: DriverSeason) {
 }
 
 /**
- * Points behind the leader after each round (or ahead of P2, for the leader). Tap the chart
- * to read a round. The line sits above zero when behind.
+ * The championship gap, made readable: a sentence ("34 behind ANT, 12 closer than 3 races
+ * ago"), both drivers' points as two lines with the gap shaded between them and labelled at
+ * the end, and what it takes from here. Tap the chart to read any round.
  */
 @Composable
-private fun GapChart(gap: List<Pair<Int, Double>>, color: Color, leader: Boolean, rivalName: String) {
-    if (gap.isEmpty()) return
-    val now = gap.last().second
-    val text = when {
-        leader && now <= 0 -> "Leads $rivalName by ${Fmt.points(-now)} points"
-        leader -> "$rivalName is ahead by ${Fmt.points(now)} points"
-        now > 0 -> "${Fmt.points(now)} points behind $rivalName"
-        now < 0 -> "${Fmt.points(-now)} points ahead of $rivalName"
-        else -> "Level on points with $rivalName"
+private fun GapCard(
+    state: AppState,
+    st: Standings,
+    me: DriverStanding,
+    rival: DriverStanding,
+    mine: DriverSeason,
+    theirs: DriverSeason,
+    color: Color,
+    rivalColor: Color,
+) {
+    val a = mine.cumulative().toMap()
+    val b = theirs.cumulative().toMap()
+    val rounds = (a.keys + b.keys).distinct().sorted()
+    if (rounds.isEmpty()) return
+    // Totals after each round (a round someone missed keeps their last total).
+    var la = 0.0; var lb = 0.0
+    val rows = rounds.map { r -> a[r]?.let { la = it }; b[r]?.let { lb = it }; Triple(r, la, lb) }
+    val leader = me.position == 1
+    // Use the standings for "now" (they include any penalties the race results don't).
+    val gapNow = rival.points - me.points
+    val back = rows.getOrNull(rows.size - 4)
+    val gapThen = back?.let { it.third - it.second }
+    val headline = when {
+        gapNow > 0 -> "${Fmt.points(gapNow)} behind ${rival.code}"
+        gapNow < 0 -> "Leads ${rival.code} by ${Fmt.points(-gapNow)}"
+        else -> "Level with ${rival.code}"
     }
-    val zero = C.TextMuted
+    val modelGap = rows.last().third - rows.last().second
+    val trend = gapThen?.let { then ->
+        val moved = then - modelGap // positive: closed in (or lead grew)
+        when {
+            abs(moved) < 0.5 -> "same as 3 races ago"
+            gapNow > 0 && moved > 0 -> "${Fmt.points(moved)} closer than 3 races ago"
+            gapNow > 0 -> "${Fmt.points(-moved)} further back than 3 races ago"
+            moved > 0 -> "lead up ${Fmt.points(moved)} in 3 races"
+            else -> "lead down ${Fmt.points(-moved)} in 3 races"
+        }
+    }
+    val ahead = remember(st.season, state.seasons) { state.ahead(st.season) }
+    val left = DriverStats.pointsLeft(ahead.racesLeft, ahead.sprintsLeft)
+    val needs = when {
+        ahead.racesLeft == 0 -> null
+        gapNow > 0 && gapNow > left -> "Can't catch ${rival.code} now: only $left points left."
+        gapNow > 0 -> "Needs to outscore ${rival.code} by " + String.format(java.util.Locale.US, "%.1f", gapNow / ahead.racesLeft) +
+            " points a race over the ${ahead.racesLeft} left."
+        gapNow < 0 -> "Can lose " + String.format(java.util.Locale.US, "%.1f", -gapNow / ahead.racesLeft) +
+            " points a race to ${rival.code} and still lead."
+        else -> null
+    }
+
     val grid = C.GlassBorder
+    val guide = C.TextMuted
     val ring = C.Surface
     val intro = LocalIntro.current
     val progress = remember { Animatable(if (intro) 0f else 1f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-    var sel by remember(gap) { mutableStateOf<Int?>(null) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(text, style = inter(13.sp, FontWeight.SemiBold, C.Text))
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(90.dp)
-                .semantics { contentDescription = "Points gap to $rivalName by round: " + gap.joinToString(", ") { (r, g) -> "round $r ${Fmt.points(abs(g))} " + if ((if (leader) -g else g) > 0) (if (leader) "ahead" else "behind") else if (g == 0.0) "level" else (if (leader) "behind" else "ahead") } }
-                .pointerInput(gap) {
-                    detectTapGestures { p ->
-                        val pad = 6.dp.toPx()
-                        val w = size.width - pad * 2
-                        val i = if (gap.size == 1) 0 else (((p.x - pad) / w) * (gap.size - 1)).roundToInt().coerceIn(0, gap.lastIndex)
-                        sel = if (sel == i) null else i
+    var sel by remember(rows.size) { mutableStateOf<Int?>(null) }
+    val top = rows.maxOf { maxOf(it.second, it.third) }.let { kotlin.math.ceil(it / 50.0) * 50.0 }.coerceAtLeast(50.0)
+    val minR = rounds.first(); val maxR = rounds.last()
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(headline, style = orbitron(16.sp, FontWeight.Bold, if (gapNow > 0) C.Text else readable(color)))
+        trend?.let { Text(it.replaceFirstChar { c -> c.uppercase() }, style = inter(12.sp, color = C.TextSecondary)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LineSwatch(color, dashed = false)
+            Text(" ${me.code}    ", style = inter(11.sp, FontWeight.Medium, C.TextSecondary))
+            LineSwatch(rivalColor, dashed = true)
+            Text(" ${rival.code}", style = inter(11.sp, FontWeight.Medium, C.TextSecondary))
+            Spacer(Modifier.weight(1f))
+            Text("points", style = inter(10.sp, color = C.TextMuted))
+        }
+        Row(Modifier.fillMaxWidth().height(150.dp)) {
+            Column(Modifier.fillMaxHeight().width(30.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                for (v in listOf(top, top / 2, 0.0)) Text(v.roundToInt().toString(), style = inter(9.sp, color = C.TextMuted))
+            }
+            Canvas(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .semantics { contentDescription = "$headline. ${me.code} and ${rival.code} points after each round." }
+                    .pointerInput(rounds) {
+                        detectTapGestures { p ->
+                            val pad = 6.dp.toPx()
+                            val w = size.width - pad * 2 - 34.dp.toPx()
+                            val i = if (rows.size == 1) 0 else (((p.x - pad) / w) * (rows.size - 1)).roundToInt().coerceIn(0, rows.lastIndex)
+                            sel = if (sel == i) null else i
+                        }
                     }
+            ) {
+                val pad = 6.dp.toPx()
+                val labelRoom = 34.dp.toPx()
+                val w = size.width - pad * 2 - labelRoom
+                val h = size.height - pad * 2
+                fun x(i: Int) = pad + if (rows.size == 1) w / 2 else i.toFloat() / (rows.size - 1) * w
+                fun y(v: Double) = pad + ((top - v) / top).toFloat() * h
+                for (v in listOf(top, top / 2, 0.0)) drawLine(grid, Offset(pad, y(v)), Offset(pad + w, y(v)), 1.dp.toPx())
+                sel?.let { drawLine(guide.copy(alpha = 0.5f), Offset(x(it), pad), Offset(x(it), pad + h), 1.dp.toPx()) }
+                clipRect(right = pad + w * progress.value + 6.dp.toPx()) {
+                    // The gap: shaded between the two lines.
+                    val band = Path().apply {
+                        rows.forEachIndexed { i, r -> if (i == 0) moveTo(x(i), y(r.second)) else lineTo(x(i), y(r.second)) }
+                        for (i in rows.indices.reversed()) lineTo(x(i), y(rows[i].third))
+                        close()
+                    }
+                    drawPath(band, (if (gapNow > 0) rivalColor else color).copy(alpha = 0.16f))
+                    val pa = Path(); val pb = Path()
+                    rows.forEachIndexed { i, r ->
+                        if (i == 0) { pa.moveTo(x(i), y(r.second)); pb.moveTo(x(i), y(r.third)) } else { pa.lineTo(x(i), y(r.second)); pb.lineTo(x(i), y(r.third)) }
+                    }
+                    drawPath(pb, rivalColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))))
+                    drawPath(pa, color, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    val last = rows.lastIndex
+                    drawCircle(rivalColor, 3.5.dp.toPx(), Offset(x(last), y(rows[last].third)))
+                    drawCircle(color, 4.dp.toPx(), Offset(x(last), y(rows[last].second)))
+                    // The gap bracket at the right end.
+                    val x2 = x(last) + 8.dp.toPx()
+                    drawLine(guide, Offset(x2, y(rows[last].second)), Offset(x2, y(rows[last].third)), 1.5.dp.toPx())
                 }
-        ) {
-            val pad = 6.dp.toPx()
-            val w = size.width - pad * 2
-            val h = size.height - pad * 2
-            val vals = gap.map { if (leader) -it.second else it.second }
-            val top = maxOf(vals.max(), 0.0)
-            val bottom = minOf(vals.min(), 0.0)
-            val span = (top - bottom).takeIf { it > 0 } ?: 1.0
-            fun x(i: Int) = pad + if (gap.size == 1) w / 2 else i.toFloat() / (gap.size - 1) * w
-            fun y(v: Double) = pad + ((top - v) / span).toFloat() * h
-            drawLine(grid, Offset(pad, pad), Offset(pad + w, pad), 1.dp.toPx())
-            drawLine(grid, Offset(pad, pad + h), Offset(pad + w, pad + h), 1.dp.toPx())
-            drawLine(zero.copy(alpha = 0.6f), Offset(pad, y(0.0)), Offset(pad + w, y(0.0)), 1.dp.toPx())
-            val line = Path()
-            val area = Path()
-            vals.forEachIndexed { i, v ->
-                if (i == 0) { line.moveTo(x(i), y(v)); area.moveTo(x(i), y(0.0)); area.lineTo(x(i), y(v)) }
-                else { line.lineTo(x(i), y(v)); area.lineTo(x(i), y(v)) }
-            }
-            area.lineTo(x(vals.lastIndex), y(0.0)); area.close()
-            clipRect(right = pad + w * progress.value + 4.dp.toPx()) {
-                drawPath(area, color.copy(alpha = 0.18f))
-                drawPath(line, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                drawCircle(color, 3.5.dp.toPx(), Offset(x(vals.lastIndex), y(vals.last())))
-            }
-            sel?.let { i ->
-                drawLine(zero.copy(alpha = 0.5f), Offset(x(i), pad), Offset(x(i), pad + h), 1.dp.toPx())
-                drawCircle(ring, 6.dp.toPx(), Offset(x(i), y(vals[i])))
-                drawCircle(color, 4.5.dp.toPx(), Offset(x(i), y(vals[i])))
+                sel?.let { i ->
+                    drawCircle(ring, 6.dp.toPx(), Offset(x(i), y(rows[i].second))); drawCircle(color, 4.5.dp.toPx(), Offset(x(i), y(rows[i].second)))
+                    drawCircle(ring, 5.dp.toPx(), Offset(x(i), y(rows[i].third))); drawCircle(rivalColor, 3.5.dp.toPx(), Offset(x(i), y(rows[i].third)))
+                }
             }
         }
-        val caption = sel?.let { i ->
-            val (round, g) = gap[i]
-            val v = if (leader) -g else g
-            "After R$round: " + when {
-                v > 0 && leader -> "${Fmt.points(v)} ahead of $rivalName"
-                v > 0 -> "${Fmt.points(v)} behind $rivalName"
-                v < 0 && leader -> "${Fmt.points(-v)} behind $rivalName"
-                v < 0 -> "${Fmt.points(-v)} ahead of $rivalName"
-                else -> "level with $rivalName"
-            }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            Text("R${gap.first().first}", style = inter(9.sp, color = C.TextMuted))
+        Row(Modifier.fillMaxWidth().padding(start = 30.dp)) {
+            Text("R$minR", style = inter(9.sp, color = C.TextMuted))
             Spacer(Modifier.weight(1f))
-            Text(caption ?: "Tap the chart for any round", style = inter(10.sp, if (caption != null) FontWeight.SemiBold else FontWeight.Normal, if (caption != null) C.Text else C.TextMuted))
-            Spacer(Modifier.weight(1f))
-            Text("R${gap.last().first}", style = inter(9.sp, color = C.TextMuted))
+            Text(
+                (if (gapNow > 0) "−" else if (gapNow < 0) "+" else "") + Fmt.points(abs(gapNow)),
+                style = orbitron(11.sp, FontWeight.Bold, if (gapNow > 0) C.TextSecondary else readable(color)),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text("R$maxR", style = inter(9.sp, color = C.TextMuted))
         }
+        val pick = sel
+        if (pick == null) {
+            Text("Tap the chart for any round", style = inter(10.sp, color = C.TextMuted))
+        } else {
+            val (r, pa, pb) = rows[pick]
+            val g = pb - pa
+            Text(
+                "After R$r: ${me.code} ${Fmt.points(pa)} · ${rival.code} ${Fmt.points(pb)} · " +
+                    (if (g > 0) "${Fmt.points(g)} behind" else if (g < 0) "${Fmt.points(-g)} ahead" else "level"),
+                style = inter(12.sp, FontWeight.SemiBold, C.Text),
+            )
+        }
+        needs?.let { Text(it, style = inter(12.sp, FontWeight.Medium, if (gapNow > left) C.Warning else C.TextSecondary)) }
     }
 }
 

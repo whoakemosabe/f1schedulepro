@@ -734,6 +734,11 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
                             Modifier.heightIn(min = 44.dp).tap { note.undo.invoke(); bellNote = null }.padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) { Text("Undo", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
+                    } else if (note?.settings == true) {
+                        Box(
+                            Modifier.heightIn(min = 44.dp).tap { bellNote = null; state.tab = Tab.Settings }.padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("Settings", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
                     } else {
                         Spacer(Modifier.height(44.dp))
                     }
@@ -741,7 +746,8 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
             }
             LaunchedEffect(bellNote) { if (bellNote != null) { kotlinx.coroutines.delay(4000); bellNote = null } }
             Text(
-                "Bells add single sessions on top of your usual reminder setting.",
+                if (state.alertsOn) "Bells change single sessions; Settings › Notifications sets the rest."
+                else "Reminders are off in Settings, so the bells are paused.",
                 style = inter(11.sp, color = C.TextMuted),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
             )
@@ -751,28 +757,30 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
 }
 
 /** The confirmation under the session list after a bell tap. */
-private class BellNote(val text: String, val undo: (() -> Unit)?)
+private class BellNote(val text: String, val undo: (() -> Unit)?, val settings: Boolean = false)
 
 /**
- * The bell on one session row. Filled red: its own reminder is on. Blue outline: your usual
- * Notifications setting already covers it. Grey: off. Asks for notification permission the
- * first time if needed.
+ * The bell on one session row: this session's reminder, on or off. Settings decides the
+ * default for every session; a bell overrides just this one, either way. Red: on (filled when
+ * changed here, outline when it's the usual setting). Slashed: off. With reminders off in
+ * Settings every bell is greyed out and a tap says so.
  */
 @Composable
 private fun SessionBell(state: AppState, race: Race, session: String, note: (BellNote) -> Unit) {
     val view = androidx.compose.ui.platform.LocalView.current
     val context = LocalContext.current
-    val key = app.f1pro.data.Slot(race, race.sessions.first { it.name == session }).key
-    val own = key in state.bells
-    val usual = state.remindedAnyway(session)
+    val slot = app.f1pro.data.Slot(race, race.sessions.first { it.name == session })
+    val master = state.alertsOn
+    val on = state.bellOn(slot)
+    val changed = state.bellOverridden(slot)
     val lead = state.leadMinutes
     fun flip() {
-        val on = state.toggleBell(key)
-        if (on) Haptics.confirm(view) else Haptics.tap(view)
+        val now = state.toggleBell(slot)
+        if (now) Haptics.confirm(view) else Haptics.tap(view)
         note(
             BellNote(
-                if (on) "$session reminder set, $lead min before" else "$session reminder off",
-                undo = { state.toggleBell(key) },
+                if (now) "$session reminder on, $lead min before" else "$session reminder off",
+                undo = { state.toggleBell(slot) },
             )
         )
     }
@@ -780,34 +788,34 @@ private fun SessionBell(state: AppState, race: Race, session: String, note: (Bel
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) flip() else note(BellNote("Allow notifications for F1 Pro to get reminders", null)) }
     val color = when {
-        own -> C.AccentText
-        usual -> C.Highlight
+        !master -> C.TextMuted.copy(alpha = 0.5f)
+        on -> C.AccentText
         else -> C.TextMuted
     }
     Box(
         Modifier
             .size(44.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (own) C.Accent.copy(alpha = 0.14f) else Color.Transparent)
-            .border(1.dp, if (own) C.AccentText.copy(alpha = 0.5f) else C.GlassBorder, RoundedCornerShape(10.dp))
+            .background(if (master && on && changed) C.Accent.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (master && on) C.AccentText.copy(alpha = if (changed) 0.6f else 0.3f) else C.GlassBorder, RoundedCornerShape(10.dp))
             .tap {
                 when {
-                    usual && !own -> note(BellNote("Already reminded by your Notifications setting", null))
-                    !own && !app.f1pro.work.Alerts.canNotify(context) && android.os.Build.VERSION.SDK_INT >= 33 ->
+                    !master -> note(BellNote("Reminders are off in Settings", undo = null, settings = true))
+                    !on && !app.f1pro.work.Alerts.canNotify(context) && android.os.Build.VERSION.SDK_INT >= 33 ->
                         ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                     else -> flip()
                 }
             }
             .semantics {
                 contentDescription = when {
-                    own -> "$session reminder on. Tap to turn off"
-                    usual -> "$session: reminded by your Notifications setting"
-                    else -> "Remind me before $session"
+                    !master -> "$session: reminders are off in Settings"
+                    on -> "$session reminder on. Tap to turn off"
+                    else -> "$session reminder off. Tap to turn on"
                 }
             },
         contentAlignment = Alignment.Center,
     ) {
-        Ic(if (own || usual) R.drawable.lc_bell else R.drawable.lc_bell_off, color, 18.dp)
+        Ic(if (master && on) R.drawable.lc_bell else R.drawable.lc_bell_off, color, 18.dp)
     }
 }
 

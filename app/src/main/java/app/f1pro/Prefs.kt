@@ -45,6 +45,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("session_bells", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("session_bells", v.toSortedSet().toList().takeLast(60).toSet()).apply()
 
+    /** Sessions with their bell turned off on the race page: no reminder, whatever the usual setting. */
+    var sessionMutes: Set<String>
+        get() = p.getStringSet("session_mutes", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("session_mutes", v.toSortedSet().toList().takeLast(60).toSet()).apply()
+
     var sentReminders: Set<String>
         get() = p.getStringSet("sent_reminders", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("sent_reminders", v.toSortedSet().toList().takeLast(150).toSet()).apply()

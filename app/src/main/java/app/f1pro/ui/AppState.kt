@@ -540,19 +540,42 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     var bells by mutableStateOf(prefs.sessionBells)
         private set
+    var mutes by mutableStateOf(prefs.sessionMutes)
+        private set
 
-    /** Turns one session's bell on or off; returns whether it's now on. */
-    fun toggleBell(key: String): Boolean {
-        val on = key !in bells
-        bells = if (on) bells + key else bells - key
-        prefs.sessionBells = bells
+    /** Whether this session gets a reminder: the usual setting, unless its bell says otherwise. */
+    fun bellOn(slot: app.f1pro.data.Slot): Boolean =
+        app.f1pro.data.Planner.reminds(slot, alertWhich, bells, mutes)
+
+    /** This session's bell was changed on the race page (differs from the usual setting). */
+    fun bellOverridden(slot: app.f1pro.data.Slot): Boolean = slot.key in bells || slot.key in mutes
+
+    /**
+     * Flips one session's reminder. The usual setting stays the default; the bell records only
+     * the difference (an extra session, or one silenced). Returns whether it's now on.
+     */
+    fun toggleBell(slot: app.f1pro.data.Slot): Boolean {
+        val key = slot.key
+        var b = bells - key
+        var m = mutes - key
+        val byDefault = app.f1pro.data.Sessions.wanted(slot.session.name, alertWhich)
+        val wasOn = bellOn(slot)
+        if (wasOn) { if (byDefault) m = m + key } else { if (!byDefault) b = b + key }
+        bells = b; mutes = m
+        prefs.sessionBells = b; prefs.sessionMutes = m
         rescheduled()
-        return on
+        return !wasOn
     }
 
-    /** Whether the usual Notifications setting already reminds for this session. */
-    fun remindedAnyway(sessionName: String): Boolean =
-        alertsOn && app.f1pro.data.Sessions.wanted(sessionName, alertWhich)
+    /** Race-page changes still ahead (for "3 sessions changed" in Settings). */
+    fun bellChanges(now: Long = System.currentTimeMillis()): Int =
+        app.f1pro.data.Planner.slots(seasons).count { it.session.start > now && (it.key in bells || it.key in mutes) }
+
+    fun resetBells() {
+        bells = emptySet(); mutes = emptySet()
+        prefs.sessionBells = emptySet(); prefs.sessionMutes = emptySet()
+        rescheduled()
+    }
 
     fun setLead(min: Int) {
         prefs.leadMinutes = min

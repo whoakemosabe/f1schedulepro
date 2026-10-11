@@ -82,14 +82,18 @@ class PlannerTest {
     }
 
     @Test
-    fun bellsAddSessionsOnTopOfTheUsualSetting() {
+    fun bellsOverrideTheUsualSettingPerSession() {
         val fp1 = Planner.slots(seasons).first { it.session.name == "Practice 1" && !it.race.isTesting }
         val at = fp1.session.start - 30 * 60_000L
-        // Races-only setting: FP1 isn't due…
-        assertTrue(Planner.dueReminders(seasons, at, 30 * 60_000L, "race", emptySet()).none { it.key == fp1.key })
-        // …unless its bell is on, even with reminders switched off.
-        assertTrue(Planner.dueReminders(seasons, at, 30 * 60_000L, "race", emptySet(), setOf(fp1.key), alertsOn = false).any { it.key == fp1.key })
-        val wake = Planner.nextWake(seasons, at - 60 * 60_000L, false, 30 * 60_000L, "race", setOf(fp1.key))
-        assertEquals(at, wake)
+        val lead = 30 * 60_000L
+        // Races-only: FP1 isn't due, unless its bell is on.
+        assertTrue(Planner.dueReminders(seasons, at, lead, "race", emptySet()).none { it.key == fp1.key })
+        assertTrue(Planner.dueReminders(seasons, at, lead, "race", emptySet(), setOf(fp1.key)).any { it.key == fp1.key })
+        // All sessions: FP1 is due, unless its bell is off.
+        assertTrue(Planner.dueReminders(seasons, at, lead, "all", emptySet()).any { it.key == fp1.key })
+        assertTrue(Planner.dueReminders(seasons, at, lead, "all", emptySet(), mutes = setOf(fp1.key)).none { it.key == fp1.key })
+        // Reminders off in Settings: nothing, bells included.
+        assertTrue(Planner.dueReminders(seasons, at, lead, "race", emptySet(), setOf(fp1.key), alertsOn = false).isEmpty())
+        assertEquals(at, Planner.nextWake(seasons, at - 60 * 60_000L, true, lead, "race", setOf(fp1.key)))
     }
 }

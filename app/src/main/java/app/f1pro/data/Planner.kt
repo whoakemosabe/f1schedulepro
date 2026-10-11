@@ -53,11 +53,19 @@ object Planner {
         sent: Set<String>,
         bells: Set<String> = emptySet(),
         alertsOn: Boolean = true,
-    ): List<Slot> = slots(seasons).filter { s ->
+        mutes: Set<String> = emptySet(),
+    ): List<Slot> = if (!alertsOn) emptyList() else slots(seasons).filter { s ->
         val st = s.session.start
-        !s.session.tbc && ((alertsOn && Sessions.wanted(s.session.name, which)) || s.key in bells) &&
+        !s.session.tbc && reminds(s, which, bells, mutes) &&
             st - leadMs <= now + 30_000 && st > now - 10 * MIN_MS && s.key !in sent
     }
+
+    /**
+     * Whether a session gets a reminder (with reminders on): the usual setting ("all", "quali",
+     * "race") decides, and a race-page bell overrides that one session either way.
+     */
+    fun reminds(s: Slot, which: String, bells: Set<String>, mutes: Set<String>): Boolean =
+        s.key !in mutes && (s.key in bells || Sessions.wanted(s.session.name, which))
 
     /**
      * The next moment something changes: a reminder is due, a session starts or ends, or the
@@ -70,12 +78,13 @@ object Planner {
         leadMs: Long,
         which: String,
         bells: Set<String> = emptySet(),
+        mutes: Set<String> = emptySet(),
     ): Long? {
         var best = Long.MAX_VALUE
         val all = slots(seasons).filter { !it.session.tbc }
         for (s in all) {
             val st = s.session.start
-            if (((alerts && Sessions.wanted(s.session.name, which)) || s.key in bells) && st - leadMs > now) best = minOf(best, st - leadMs)
+            if (alerts && reminds(s, which, bells, mutes) && st - leadMs > now) best = minOf(best, st - leadMs)
             if (st > now) best = minOf(best, st)
             if (s.session.end > now) best = minOf(best, s.session.end + 1000)
         }

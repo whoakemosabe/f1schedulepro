@@ -281,6 +281,10 @@ fun SettingsPage(state: AppState) {
                     }
                 }
             }
+            if (!state.alertsOn) {
+                val kept = state.bellChanges()
+                if (kept > 0) Small("Your $kept race-page bell" + (if (kept == 1) " is" else "s are") + " kept and come back when reminders are on.")
+            }
             if (state.alertsOn && !canNotify) {
                 Small("Notifications are blocked for F1 Pro. Allow them in system settings to get reminders.", C.Warning)
                 ActionButton("Open notification settings", R.drawable.lc_settings) {
@@ -296,6 +300,23 @@ fun SettingsPage(state: AppState) {
                 Segments(listOf("15" to "15 min", "30" to "30 min", "60" to "1 hour"), state.leadMinutes.toString()) { state.setLead(it.toInt()) }
                 Small("For:")
                 Segments(listOf("all" to "All", "quali" to "Quali + races", "race" to "Races"), state.alertWhich) { state.setWhich(it) }
+                // Bells changed on race pages: how many, and a way back to just this setting.
+                val changed = state.bellChanges()
+                if (changed > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Ic(R.drawable.lc_bell, C.AccentText, 13.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "$changed session" + (if (changed == 1) "" else "s") + " changed on race pages",
+                            style = inter(12.sp, color = C.TextSecondary),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Box(
+                            Modifier.heightIn(min = 44.dp).tap { state.resetBells() }.padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("Reset", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Live countdown", style = inter(14.sp, FontWeight.Medium))

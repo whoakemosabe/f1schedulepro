@@ -29,7 +29,11 @@ object Ticker {
         val app = context.applicationContext
         val prefs = Prefs(app)
         val seasons = Repo(app).seasons()
-        val at = Planner.nextWake(seasons, now, prefs.alertsOn, prefs.leadMinutes * MIN_MS, prefs.alertWhich, prefs.sessionBells)
+        val at = Planner.nextWake(seasons, now, prefs.alertsOn, prefs.leadMinutes * MIN_MS, prefs.alertWhich, prefs.sessionBells, prefs.sessionMutes)
+        // Bells and mutes for sessions that are over are no longer needed.
+        val future = Planner.slots(seasons).filter { it.session.start > now - 15 * MIN_MS }.map { it.key }.toSet()
+        if (prefs.sessionBells.any { it !in future }) prefs.sessionBells = prefs.sessionBells intersect future
+        if (prefs.sessionMutes.any { it !in future }) prefs.sessionMutes = prefs.sessionMutes intersect future
         val am = app.getSystemService(AlarmManager::class.java) ?: return
         val pi = PendingIntent.getBroadcast(
             app, REQUEST, Intent(app, TickReceiver::class.java),
