@@ -14,19 +14,33 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 object Net {
+    /**
+     * GET as text. Follows redirects itself (up to 5), including 307/308 and http↔https hops,
+     * which HttpURLConnection won't always do: feeds like RACER's answer with a 308 move.
+     */
     fun get(url: String, accept: String = "*/*"): String {
-        val c = URL(url).openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 15_000
-            c.readTimeout = 20_000
-            c.setRequestProperty("Accept", accept)
-            c.setRequestProperty("User-Agent", "F1SchedulePro/2.0 (Android)")
-            val code = c.responseCode
-            if (code !in 200..299) throw IOException("HTTP $code")
-            return c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        } finally {
-            c.disconnect()
+        var target = URL(url)
+        repeat(6) {
+            val c = target.openConnection() as HttpURLConnection
+            try {
+                c.instanceFollowRedirects = false
+                c.connectTimeout = 15_000
+                c.readTimeout = 20_000
+                c.setRequestProperty("Accept", accept)
+                c.setRequestProperty("User-Agent", "F1SchedulePro/2.0 (Android)")
+                val code = c.responseCode
+                if (code in 300..399) {
+                    val loc = c.getHeaderField("Location") ?: throw IOException("HTTP $code without a Location")
+                    target = URL(target, loc)
+                    return@repeat
+                }
+                if (code !in 200..299) throw IOException("HTTP $code")
+                return c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            } finally {
+                c.disconnect()
+            }
         }
+        throw IOException("Too many redirects")
     }
 }
 
