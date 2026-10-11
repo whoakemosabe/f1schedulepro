@@ -195,6 +195,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     /** Bumped when official team colours arrive, so coloured stripes redraw. */
     var teamColoursVersion by mutableLongStateOf(0L)
+        private set
 
     // ── Driver / team panel (Standings) ──
 
@@ -220,7 +221,6 @@ class AppState(context: Context, private val scope: CoroutineScope) {
             }
         }
     }
-        private set
 
     init {
         repo.loadTeamColours()
