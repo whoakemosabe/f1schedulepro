@@ -260,6 +260,20 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** circuitId-driverId → that driver's record at the track. */
+    val trackRecords = androidx.compose.runtime.mutableStateMapOf<String, app.f1pro.data.TrackRecord>()
+    private val trackLoading = HashSet<String>()
+
+    fun loadTrackRecord(circuitId: String, driverId: String) {
+        val k = "$circuitId-$driverId"
+        if (trackRecords.containsKey(k) || !trackLoading.add(k)) return
+        scope.launch {
+            val season = standings?.season
+            try { repo.trackRecord(circuitId, driverId, season?.let { lastRaceEnd(it) })?.let { trackRecords[k] = it } } catch (e: Exception) { }
+            finally { trackLoading.remove(k) }
+        }
+    }
+
     /** For the This weekend card: the season's next (or current) race and what's left to score. */
     data class Ahead(val race: app.f1pro.data.Race?, val racesLeft: Int, val sprintsLeft: Int)
 
