@@ -21,8 +21,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -163,7 +161,6 @@ private fun ActionButton(text: String, icon: Int?, color: Color = C.Highlight, e
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsPage(state: AppState) {
     val context = LocalContext.current
@@ -336,13 +333,13 @@ fun SettingsPage(state: AppState) {
                 Text("F1 Schedule Pro", style = inter(14.sp, FontWeight.SemiBold))
                 Text(" — ${state.seasonFor(System.currentTimeMillis())?.year ?: ""} Season", style = inter(14.sp, color = C.TextMuted))
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Wrap(gap = 16.dp, rowGap = 4.dp) {
                 for (f in listOf("Auto timezone conversion", "Works offline", "Session reminders", "Live standings", "Home-screen widgets")) {
                     Text(f, style = inter(11.sp, color = C.TextSecondary))
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.Border.copy(alpha = 0.5f)))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Wrap(gap = 6.dp, rowGap = 4.dp) {
                 for (s in listOf("Jolpica F1 API", "f1api.dev", "RACER RSS", "Autosport RSS", "Motorsport RSS", "The Race RSS")) {
                     Text(
                         s,

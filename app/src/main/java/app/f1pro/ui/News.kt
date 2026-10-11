@@ -16,8 +16,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -79,7 +77,7 @@ private val SOURCE_COLORS get() = mapOf(
 
 private val SORT_LABELS = mapOf("newest" to "Newest", "oldest" to "Oldest", "source" to "Source")
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsPage(state: AppState, listState: LazyListState) {
     val context = LocalContext.current
@@ -121,7 +119,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Wrap(gap = 6.dp) {
                         for (l in QUICK_LINKS) {
                             Chip(l.label, icon = l.icon, iconColor = l.color) { openUrl(context, l.url) }
                         }
@@ -204,7 +202,7 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                         }
                     }
                 } else {
-                    itemsIndexed(items, key = { _, n -> n.source + n.link }) { i, n ->
+                    itemsIndexed(items, key = { i, n -> "$i|${n.link}" }) { i, n ->
                         val featured = i == 0 && sort == "newest"
                         Column(
                             Modifier

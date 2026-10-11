@@ -37,6 +37,15 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     var tab by mutableStateOf(Tab.Schedule)
 
+    /** The last crash's details, shown once so they can be copied. */
+    var lastCrash by mutableStateOf(app.f1pro.CrashLog.read(this.context))
+        private set
+
+    fun dismissCrash() {
+        app.f1pro.CrashLog.clear(context)
+        lastCrash = null
+    }
+
     var seasons by mutableStateOf(repo.seasons())
         private set
     val circuits: Map<String, CircuitStats> = repo.circuits()

@@ -288,3 +288,44 @@ fun UpdateBanner() {
         }
     }
 }
+
+/** After a crash: what went wrong, with a Copy button so it can be pasted to Claude. */
+@Composable
+fun CrashCard(state: AppState) {
+    val text = state.lastCrash ?: return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    var copied by remember { androidx.compose.runtime.mutableStateOf(false) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 10.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(C.Card)
+            .border(1.dp, C.Live.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("F1 Pro crashed last time", style = orbitron(13.sp, FontWeight.Bold, C.Live, 0.02f))
+        Text(
+            text.lines().filter { it.isNotBlank() }.take(8).joinToString("\n"),
+            style = androidx.compose.ui.text.TextStyle(
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                fontSize = 10.sp,
+                color = C.TextSecondary,
+                lineHeight = 13.sp,
+            ),
+            maxLines = 8,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (copied) "Copied" else "Copy details", icon = app.f1pro.R.drawable.lc_bookmark, iconColor = C.Highlight) {
+                val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("F1 Pro crash", text))
+                copied = true
+                Haptics.confirm(view)
+            }
+            Chip("Dismiss") { state.dismissCrash() }
+        }
+    }
+}

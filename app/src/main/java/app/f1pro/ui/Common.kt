@@ -334,3 +334,34 @@ fun SlidingSegments(
     }
 }
 
+
+/** Lays children left to right and wraps to a new line when a row is full. */
+@Composable
+fun Wrap(gap: Dp, rowGap: Dp = gap, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content, modifier) { measurables, constraints ->
+        val g = gap.roundToPx()
+        val rg = rowGap.roundToPx()
+        val maxW = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val positions = ArrayList<Pair<Int, Int>>(placeables.size)
+        var x = 0
+        var y = 0
+        var rowH = 0
+        var widest = 0
+        for (p in placeables) {
+            if (x > 0 && x + p.width > maxW) {
+                x = 0
+                y += rowH + rg
+                rowH = 0
+            }
+            positions += x to y
+            x += p.width + g
+            rowH = maxOf(rowH, p.height)
+            widest = maxOf(widest, x - g)
+        }
+        val w = if (constraints.hasBoundedWidth) constraints.maxWidth else widest
+        layout(w, y + rowH) {
+            placeables.forEachIndexed { i, p -> p.placeRelative(positions[i].first, positions[i].second) }
+        }
+    }
+}

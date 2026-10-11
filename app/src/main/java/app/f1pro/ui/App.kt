@@ -37,6 +37,7 @@ fun F1App(state: AppState) {
         Column(Modifier.fillMaxSize().background(C.Bg)) {
             Header(state)
             UpdateBanner()
+            CrashCard(state)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 AnimatedContent(
                     targetState = state.tab,
