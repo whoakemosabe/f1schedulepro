@@ -496,47 +496,7 @@ private fun FavouriteSettings(state: AppState) {
                 Spacer(Modifier.width(8.dp))
                 Ic(R.drawable.lc_chevron_down, C.TextMuted, 14.dp)
             }
-            DropdownMenu(
-                expanded = open,
-                onDismissRequest = { open = false },
-                containerColor = C.Surface,
-                modifier = Modifier.heightIn(max = 420.dp),
-            ) {
-                DropdownMenuItem(
-                    text = { Text("No favourite", style = inter(14.sp, FontWeight.Medium, if (fav == null) C.AccentText else C.Text)) },
-                    onClick = {
-                        if (fav != null) Haptics.segment(view)
-                        state.chooseFavourite(null)
-                        open = false
-                    },
-                )
-                if (drivers.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Loading drivers…", style = inter(13.sp, color = C.TextMuted)) },
-                        onClick = { state.loadStandings() },
-                    )
-                }
-                for (d in drivers) {
-                    val active = fav?.matches(d.name, d.surname) == true
-                    DropdownMenuItem(
-                        leadingIcon = {
-                            Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Color(app.f1pro.data.Teams.color(d.teamId))))
-                        },
-                        text = {
-                            Column {
-                                Text("${d.name} ${d.surname}", style = inter(14.sp, FontWeight.Medium, if (active) C.AccentText else C.Text))
-                                Text(app.f1pro.data.Teams.shortName(d.teamName) + " · P${d.position}", style = inter(11.sp, color = C.TextMuted))
-                            }
-                        },
-                        trailingIcon = { if (active) Ic(R.drawable.lc_check, C.AccentText, 14.dp) },
-                        onClick = {
-                            if (!active) Haptics.segment(view)
-                            state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))
-                            open = false
-                        },
-                    )
-                }
-            }
+            DriverPickerMenu(state, open) { open = false }
         }
         if (fav != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -557,6 +517,55 @@ private fun FavouriteSettings(state: AppState) {
             Small("Highlighted in standings, results and the Your driver widget.")
         } else {
             Small("Pick a driver to highlight them in standings and results, get a widget, and hear how they did after each session.")
+        }
+    }
+}
+
+/** The list of this season's drivers to pick a favourite from. Used in Settings and on Standings. */
+@Composable
+fun DriverPickerMenu(state: AppState, open: Boolean, onDismiss: () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val fav = state.favourite
+    val drivers = state.standings?.drivers.orEmpty()
+    DropdownMenu(
+        expanded = open,
+        onDismissRequest = onDismiss,
+        containerColor = C.Surface,
+        modifier = Modifier.heightIn(max = 420.dp),
+    ) {
+        DropdownMenuItem(
+            text = { Text("No favourite", style = inter(14.sp, FontWeight.Medium, if (fav == null) C.AccentText else C.Text)) },
+            onClick = {
+                if (fav != null) Haptics.segment(view)
+                state.chooseFavourite(null)
+                onDismiss()
+            },
+        )
+        if (drivers.isEmpty()) {
+            DropdownMenuItem(
+                text = { Text("Loading drivers…", style = inter(13.sp, color = C.TextMuted)) },
+                onClick = { state.loadStandings() },
+            )
+        }
+        for (d in drivers) {
+            val active = fav?.matches(d.name, d.surname) == true
+            DropdownMenuItem(
+                leadingIcon = {
+                    Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Color(app.f1pro.data.Teams.color(d.teamId))))
+                },
+                text = {
+                    Column {
+                        Text("${d.name} ${d.surname}", style = inter(14.sp, FontWeight.Medium, if (active) C.AccentText else C.Text))
+                        Text(app.f1pro.data.Teams.shortName(d.teamName) + " · P${d.position}", style = inter(11.sp, color = C.TextMuted))
+                    }
+                },
+                trailingIcon = { if (active) Ic(R.drawable.lc_check, C.AccentText, 14.dp) },
+                onClick = {
+                    if (!active) Haptics.segment(view)
+                    state.chooseFavourite(app.f1pro.data.Favourite(d.name, d.surname, d.teamId, d.teamName))
+                    onDismiss()
+                },
+            )
         }
     }
 }

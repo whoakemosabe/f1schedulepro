@@ -113,7 +113,7 @@ fun StandingsPage(state: AppState, listState: LazyListState) {
 
             val favRow = fav?.let { f -> st?.drivers?.firstOrNull { f.matches(it.name, it.surname) } }
             if (fav != null) {
-                item { FavouriteCard(fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) { state.tab = Tab.Settings } }
+                item { FavouriteCard(state, fav, favRow, st?.drivers?.firstOrNull(), st?.drivers?.getOrNull(1)) }
             }
 
             item {
@@ -259,12 +259,13 @@ private fun TeamCard(t: TeamStanding, drivers: List<DriverStanding>, leader: Dou
 /** "Your driver" at the top of Standings: position, points, gap and wins. */
 @Composable
 private fun FavouriteCard(
+    state: AppState,
     fav: app.f1pro.data.Favourite,
     row: DriverStanding?,
     leader: DriverStanding?,
     second: DriverStanding?,
-    onChange: () -> Unit,
 ) {
+    var picking by remember { mutableStateOf(false) }
     val color = Color(Teams.color(row?.teamId ?: fav.teamId))
     val shape = CardShape
     Row(
@@ -294,6 +295,10 @@ private fun FavouriteCard(
             Text(line, style = inter(12.sp, FontWeight.Medium, readable(color)), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
-        Chip("Change", onClick = onChange)
+        // Change opens the driver list right here.
+        Box {
+            Chip("Change") { picking = true }
+            DriverPickerMenu(state, picking) { picking = false }
+        }
     }
 }
