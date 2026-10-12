@@ -26,7 +26,7 @@ object Updater {
     const val REPO = "whoakemosabe/f1schedulepro"
     const val RELEASES_URL = "https://github.com/$REPO/releases/latest"
 
-    data class Release(val version: String, val assetUrl: String, val sizeBytes: Long, val notes: List<String> = emptyList())
+    data class Release(val version: String, val assetUrl: String, val sizeBytes: Long, val notes: List<String> = emptyList(), val behind: Int = 1)
 
     /**
      * The bullets from a release's notes: the hand-written "Highlights" when the release has
@@ -65,6 +65,17 @@ object Updater {
             out += whatsNew(r.optString("body"))
         }
         return out.take(10)
+    }
+
+    /** How many published releases are newer than [installed] (capped by what the page holds). */
+    fun countSince(releasesJson: String, installed: String): Int {
+        val arr = org.json.JSONArray(releasesJson)
+        var n = 0
+        for (i in 0 until arr.length()) {
+            val r = arr.getJSONObject(i)
+            if (!r.optBoolean("draft") && !r.optBoolean("prerelease") && isNewer(r.optString("tag_name"), installed)) n++
+        }
+        return n
     }
 
     sealed class Check {
@@ -112,14 +123,15 @@ object Updater {
             if (!isNewer(tag, installedVersion(context))) return@withContext Check.UpToDate
             val installed = installedVersion(context)
             val notes = try {
-                val r = open("https://api.github.com/repos/$REPO/releases?per_page=15", "application/vnd.github+json")
+                val r = open("https://api.github.com/repos/$REPO/releases?per_page=30", "application/vnd.github+json")
                 val body = if (r.responseCode in 200..299) r.inputStream.bufferedReader().use { it.readText() } else null
                 r.disconnect()
-                body?.let { notesSince(it, installed) }
+                body?.let { notesSince(it, installed) to countSince(it, installed) }
             } catch (e: Exception) { null }
             Check.Available(Release(
                 tag.removePrefix("v"), apk.getString("browser_download_url"), apk.optLong("size"),
-                notes?.takeIf { it.isNotEmpty() } ?: whatsNew(json.optString("body")),
+                notes?.first?.takeIf { it.isNotEmpty() } ?: whatsNew(json.optString("body")),
+                behind = notes?.second?.coerceAtLeast(1) ?: 1,
             ))
         } catch (e: Exception) {
             Check.Failed("Couldn't reach GitHub.")
@@ -239,6 +251,9 @@ object UpdateWatch {
     fun notes(context: Context): List<String> =
         Prefs(context).availableNotes.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
+    /** How many updates the waiting version is ahead of this one (1 = just the latest). */
+    fun behind(context: Context): Int = Prefs(context).availableBehind.coerceAtLeast(1)
+
     /** True once per version: the "What's new" popup should open for [version]. */
     fun shouldShowWhatsNew(context: Context, version: String): Boolean =
         Prefs(context).whatsNewShown != version && notes(context).isNotEmpty()
@@ -258,6 +273,7 @@ object UpdateWatch {
                 is Updater.Check.Available -> {
                     p.availableVersion = r.release.version
                     p.availableNotes = r.release.notes.joinToString("\n")
+                    p.availableBehind = r.release.behind
                 }
                 Updater.Check.UpToDate -> p.availableVersion = ""
                 is Updater.Check.Failed -> {}
@@ -288,6 +304,7 @@ object UpdateWatch {
             is Updater.Check.Available -> {
                 Prefs(context).availableVersion = r.release.version
                 Prefs(context).availableNotes = r.release.notes.joinToString("\n")
+                Prefs(context).availableBehind = r.release.behind
                 waitingVersion = waiting(context)
                 UpdateUi.Available(r.release)
             }

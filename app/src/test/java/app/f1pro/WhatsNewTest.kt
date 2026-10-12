@@ -32,5 +32,7 @@ class WhatsNewTest {
         fun rel(tag: String, note: String) = """{"tag_name":"$tag","body":"### Highlights\n- $note\n"}"""
         val json = "[" + listOf(rel("v2.0.70", "C"), rel("v2.0.69", "B"), rel("v2.0.68", "A")).joinToString(",") + "]"
         assertEquals(listOf("C", "B"), Updater.notesSince(json, "2.0.68"))
+        assertEquals(2, Updater.countSince(json, "2.0.68"))
+        assertEquals(0, Updater.countSince(json, "2.0.70"))
     }
 }

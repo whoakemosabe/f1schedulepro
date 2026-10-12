@@ -136,6 +136,11 @@ class Prefs(context: Context) {
         get() = p.getString("available_notes", "") ?: ""
         set(v) = p.edit().putString("available_notes", v).apply()
 
+    /** How many releases the waiting version is ahead of the installed one. */
+    var availableBehind: Int
+        get() = p.getInt("available_behind", 1)
+        set(v) = p.edit().putInt("available_behind", v).apply()
+
     /** The version whose "What's new" popup has been shown (once per version). */
     var whatsNewShown: String
         get() = p.getString("whats_new_shown", "") ?: ""

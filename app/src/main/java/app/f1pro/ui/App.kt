@@ -162,8 +162,9 @@ fun F1App(state: AppState) {
             if (waiting != null && (reopen || (auto && !dismissed))) {
                 val notes = remember(waiting) { app.f1pro.work.UpdateWatch.notes(ctx) }
                 fun close() { dismissed = true; reopen = false; app.f1pro.work.UpdateWatch.whatsNewSeen(ctx, waiting) }
+                val behind = remember(waiting) { app.f1pro.work.UpdateWatch.behind(ctx) }
                 if (notes.isNotEmpty()) WhatsNewDialog(
-                    waiting, notes,
+                    waiting, notes, behind,
                     onUpdate = {
                         close()
                         updScope.launch { try { app.f1pro.work.UpdateWatch.tap(ctx) } catch (e: Exception) { } }

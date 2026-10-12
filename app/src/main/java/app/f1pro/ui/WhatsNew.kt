@@ -43,7 +43,7 @@ import app.f1pro.R
  * download (the banner shows progress and installs); Later leaves the banner waiting.
  */
 @Composable
-fun WhatsNewDialog(version: String, notes: List<String>, onUpdate: () -> Unit, onLater: () -> Unit) {
+fun WhatsNewDialog(version: String, notes: List<String>, behind: Int, onUpdate: () -> Unit, onLater: () -> Unit) {
     val view = LocalView.current
     Dialog(onDismissRequest = onLater, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val shape = RoundedCornerShape(20.dp)
@@ -79,9 +79,22 @@ fun WhatsNewDialog(version: String, notes: List<String>, onUpdate: () -> Unit, o
                         contentAlignment = Alignment.Center,
                     ) { Ic(R.drawable.lc_zap, Color.White, 16.dp) }
                     Spacer(Modifier.width(10.dp))
-                    Text("UPDATE READY", style = inter(11.sp, FontWeight.Bold, C.AccentText, 0.14f))
+                    Text("UPDATE READY", style = inter(11.sp, FontWeight.Bold, C.AccentText, 0.14f), modifier = Modifier.weight(1f))
+                    if (behind > 1) {
+                        // Skipped a few: say so, and the list below covers all of them.
+                        Text(
+                            (if (behind >= 30) "30+" else "$behind") + " updates behind",
+                            style = inter(11.sp, FontWeight.SemiBold, C.Warning),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(C.Warning.copy(alpha = 0.12f))
+                                .border(1.dp, C.Warning.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
                 }
-                Text("What's new in v$version", style = orbitron(20.sp, FontWeight.Bold, C.Text))
+                Text(if (behind > 1) "What's new since your version" else "What's new in v$version", style = orbitron(20.sp, FontWeight.Bold, C.Text))
+                if (behind > 1) Text("Installing v$version brings you fully up to date.", style = inter(12.sp, color = C.TextSecondary))
             }
 
             Column(
