@@ -161,9 +161,10 @@ fun ResultsCard(state: AppState, race: Race, now: Long) {
                 }
             tab == "Qualifying" -> {
                 QualiHeader()
+                val gaps = remember(qualiRows) { app.f1pro.data.QualiGaps.gaps(qualiRows) }
                 qualiRows.forEachIndexed { i, q ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
-                    QualiRow(q, fav?.matches(q.givenName, q.familyName) == true)
+                    QualiRow(q, fav?.matches(q.givenName, q.familyName) == true, gaps.getOrNull(i))
                 }
             }
             else -> {
@@ -199,7 +200,7 @@ private fun QualiHeader() {
         HeaderText("POS", Modifier.width(30.dp), TextAlign.Center)
         Spacer(Modifier.width(13.dp))
         HeaderText("DRIVER", Modifier.weight(1f))
-        HeaderText("BEST", Modifier.width(96.dp), TextAlign.End)
+        HeaderText("BEST · GAP", Modifier.width(110.dp), TextAlign.End)
     }
 }
 
@@ -272,7 +273,7 @@ private fun RaceRow(r: RaceResult, isFav: Boolean) {
 }
 
 @Composable
-private fun QualiRow(q: QualiResult, isFav: Boolean) {
+private fun QualiRow(q: QualiResult, isFav: Boolean, gap: Long?) {
     val color = team(q.constructorId)
     Row(rowModifier(isFav, color), verticalAlignment = Alignment.CenterVertically) {
         Text("${q.position ?: "–"}", style = orbitron(13.sp, FontWeight.Bold, C.TextSecondary), modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
@@ -288,18 +289,35 @@ private fun QualiRow(q: QualiResult, isFav: Boolean) {
             )
             Text(Teams.shortName(q.constructorName), style = inter(11.sp, color = C.TextSecondary), maxLines = 1)
         }
-        Column(Modifier.width(96.dp), horizontalAlignment = Alignment.End) {
+        Column(Modifier.width(110.dp), horizontalAlignment = Alignment.End) {
             Text(q.best ?: "No time", style = inter(12.sp, FontWeight.Medium, if (q.best == null) C.TextMuted else C.Text))
             if (q.part.isNotEmpty()) {
-                Text(
-                    q.part,
-                    style = inter(10.sp, FontWeight.Bold, if (q.part == "Q3") C.Highlight else C.TextMuted, 0.06f),
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .border(1.dp, (if (q.part == "Q3") C.Highlight else C.TextMuted).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp),
-                )
+                Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // The gap to the fastest in the same part: Q3 to pole, Q2 to the best Q2…
+                    val pole = gap == 0L && q.part == "Q3"
+                    val gapText = when {
+                        gap == null -> null
+                        pole -> "POLE"
+                        gap == 0L -> "fastest"
+                        else -> app.f1pro.data.QualiGaps.format(gap)
+                    }
+                    gapText?.let {
+                        Text(
+                            it,
+                            style = if (pole) inter(10.sp, FontWeight.Bold, C.Highlight, 0.06f)
+                            else inter(11.sp, FontWeight.Medium, C.TextSecondary).copy(fontFeatureSettings = "tnum"),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        q.part,
+                        style = inter(10.sp, FontWeight.Bold, if (q.part == "Q3") C.Highlight else C.TextMuted, 0.06f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .border(1.dp, (if (q.part == "Q3") C.Highlight else C.TextMuted).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp),
+                    )
+                }
             }
         }
     }
