@@ -2,6 +2,8 @@ package app.f1pro.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,9 +171,11 @@ fun ResultsCard(state: AppState, race: Race, now: Long) {
             }
             else -> {
                 RaceHeader()
+                // The weekend's biggest climber from the grid (3+ places) gets a badge.
+                val mover = remember(raceRows) { raceRows.filter { (it.gained ?: 0) >= 3 }.maxByOrNull { it.gained ?: 0 } }
                 raceRows.forEachIndexed { i, r ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(C.GlassBorder))
-                    RaceRow(r, fav?.matches(r.givenName, r.familyName) == true)
+                    RaceRow(r, fav?.matches(r.givenName, r.familyName) == true, mover = r === mover)
                 }
             }
         }
@@ -211,7 +215,7 @@ private fun rowModifier(isFav: Boolean, color: Color): Modifier =
         .padding(horizontal = 14.dp, vertical = 8.dp)
 
 @Composable
-private fun RaceRow(r: RaceResult, isFav: Boolean) {
+private fun RaceRow(r: RaceResult, isFav: Boolean, mover: Boolean = false) {
     val color = team(r.constructorId)
     Row(rowModifier(isFav, color), verticalAlignment = Alignment.CenterVertically) {
         val label = when (r.positionText) {
@@ -242,7 +246,11 @@ private fun RaceRow(r: RaceResult, isFav: Boolean) {
                 )
                 if (r.fastestRank == 1) {
                     Spacer(Modifier.width(6.dp))
-                    Text("FL", style = inter(10.sp, FontWeight.Bold, Purple, 0.06f))
+                    Badge(R.drawable.lc_timer, "FL", Purple, "Fastest lap" + (r.fastestLap?.let { ", $it" } ?: ""))
+                }
+                if (mover) {
+                    Spacer(Modifier.width(6.dp))
+                    Badge(R.drawable.lc_zap, "+${r.gained}", C.Success, "Biggest mover, up ${r.gained} places")
                 }
             }
             val g = r.gained
@@ -323,3 +331,20 @@ private fun QualiRow(q: QualiResult, isFav: Boolean, gap: Long?) {
     }
 }
 
+/** A small coloured tag on a result row (fastest lap, biggest mover). */
+@Composable
+private fun Badge(@androidx.annotation.DrawableRes icon: Int, text: String, color: Color, description: String) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(color.copy(alpha = 0.16f))
+            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(5.dp))
+            .semantics { contentDescription = description }
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Ic(icon, color, 9.dp)
+        Spacer(Modifier.width(3.dp))
+        Text(text, style = inter(9.sp, FontWeight.Bold, color, 0.05f), maxLines = 1)
+    }
+}

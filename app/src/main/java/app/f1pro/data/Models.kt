@@ -294,6 +294,16 @@ data class Favourite(val givenName: String, val familyName: String, val teamId: 
         val w2 = words("$givenName $familyName")
         return w1.containsAll(w2) || w2.containsAll(w1)
     }
+
+    /** Does [text] (a headline) name this driver? Their family name as a whole word, accents ignored. */
+    fun mentionedIn(text: String): Boolean {
+        val last = Names.norm(familyName.trim().substringAfterLast(' '))
+        if (last.length < 3) return false
+        val words = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").lowercase()
+            .split(Regex("[^\\p{L}]+"))
+        return words.any { it == last || it == last + "s" }
+    }
 }
 
 object Names {

@@ -117,6 +117,11 @@ class Prefs(context: Context) {
         set(v) = p.edit().putBoolean("result_alerts", v).apply()
 
     /** Session keys whose result has been reported, so each is sent once. */
+    /** Races whose standings were refreshed on their own after the flag. */
+    var standingsRefreshed: Set<String>
+        get() = p.getStringSet("standings_refreshed", emptySet()) ?: emptySet()
+        set(v) = p.edit().putStringSet("standings_refreshed", v.toSortedSet().toList().takeLast(60).toSet()).apply()
+
     var reported: Set<String>
         get() = p.getStringSet("reported", emptySet()) ?: emptySet()
         set(v) = p.edit().putStringSet("reported", v.toSortedSet().toList().takeLast(150).toSet()).apply()

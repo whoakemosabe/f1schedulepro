@@ -29,6 +29,7 @@ object ResultsWatch {
 
     fun schedule(context: Context, seasons: List<SeasonCalendar>, now: Long = System.currentTimeMillis()) {
         val prefs = Prefs(context)
+        scheduleStandings(context, seasons, now)
         if (prefs.favourite == null || !prefs.resultAlerts) return
         val reported = prefs.reported
         val wm = WorkManager.getInstance(context)
@@ -53,6 +54,45 @@ object ResultsWatch {
     }
 
     internal fun attemptsLeft(run: Int) = run < MAX_ATTEMPTS
+
+    /**
+     * About two hours after every race (and sprint), fetch the standings by themselves, so the
+     * numbers are already right when the app opens. Retries until the table has moved.
+     */
+    private fun scheduleStandings(context: Context, seasons: List<SeasonCalendar>, now: Long) {
+        val done = Prefs(context).standingsRefreshed
+        val wm = WorkManager.getInstance(context)
+        for (slot in Planner.finishedForReport(seasons, now, windowMs = 24 * 60 * MIN_MS)) {
+            if (slot.session.name != "Race" && slot.session.name != "Sprint") continue
+            if (slot.key in done) continue
+            val delay = (slot.session.end + 120 * MIN_MS - now).coerceAtLeast(0)
+            val request = OneTimeWorkRequestBuilder<StandingsWorker>()
+                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.MINUTES)
+                .setInputData(workDataOf("key" to slot.key))
+                .build()
+            wm.enqueueUniqueWork("standings-${slot.key}", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+}
+
+/** The post-race standings refresh: done once the table's points total has gone up. */
+class StandingsWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val ctx = applicationContext
+        val prefs = Prefs(ctx)
+        val key = inputData.getString("key") ?: return Result.success()
+        if (key in prefs.standingsRefreshed) return Result.success()
+        val repo = Repo(ctx)
+        val before = repo.cachedStandings()?.drivers?.sumOf { it.points } ?: 0.0
+        val after = try { repo.fetchStandings().drivers.sumOf { it.points } } catch (e: Exception) { null }
+        val moved = after != null && after > before
+        if (!moved && runAttemptCount < 8) return Result.retry()
+        prefs.standingsRefreshed = prefs.standingsRefreshed + key
+        try { Widgets.updateAll(ctx) } catch (e: Exception) { }
+        return Result.success()
+    }
 }
 
 class ResultsWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {

@@ -70,12 +70,14 @@ private class FightLine(
     val open: () -> Unit,
     /** Why the last point isn't the race results' sum (a penalty), when it isn't. */
     val note: String? = null,
+    /** Your driver (or your driver's team): drawn bolder, starred. */
+    val fav: Boolean = false,
 )
 
 /** The line ends on the standings' total; a difference becomes the line's note. */
-private fun snapped(code: String, color: Color, dashed: Boolean, pts: List<Pair<Int, Double>>, official: Double, open: () -> Unit): FightLine {
+private fun snapped(code: String, color: Color, dashed: Boolean, pts: List<Pair<Int, Double>>, official: Double, fav: Boolean = false, open: () -> Unit): FightLine {
     val s = DriverStats.snapTo(pts, official)
-    return FightLine(code, color, dashed, s.points, open, DriverStats.adjustmentNote(code, s.adjustment, pts.lastOrNull()?.first))
+    return FightLine(code, color, dashed, s.points, open, DriverStats.adjustmentNote(code, s.adjustment, pts.lastOrNull()?.first), fav)
 }
 
 /**
@@ -91,14 +93,14 @@ fun TitleFightCard(state: AppState, st: Standings) {
     LaunchedEffect(st.season) { st.drivers.firstOrNull()?.let { state.loadDriverSeason(st.season, it) } }
     val all = state.seasonAll
 
-    val lines: List<FightLine> = remember(all, st, teams, state.teamColoursVersion) {
+    val lines: List<FightLine> = remember(all, st, teams, state.teamColoursVersion, state.favourite) {
         if (all == null) return@remember emptyList()
         if (!teams) {
             val seen = HashSet<String>()
             st.drivers.take(5).mapNotNull { d ->
                 val s = DriverStats.idFor(all.entries, d)?.let { all.drivers[it] } ?: return@mapNotNull null
                 val color = Color(Teams.color(d.teamId))
-                snapped(d.code, color, !seen.add(d.teamId), s.cumulative(), d.points) { state.sheetDriver = d }
+                snapped(d.code, color, !seen.add(d.teamId), s.cumulative(), d.points, state.favourite?.matches(d.name, d.surname) == true) { state.sheetDriver = d }
             }
         } else {
             st.teams.take(5).map { t ->
@@ -112,7 +114,7 @@ fun TitleFightCard(state: AppState, st: Standings) {
                     var sum = 0.0
                     pts = per.map { (round, p) -> sum += p; round to sum }
                 }
-                snapped(Teams.shortName(t.teamName).take(3).uppercase(), Color(Teams.color(t.teamId)), false, pts, t.points) { state.sheetTeam = t }
+                snapped(Teams.shortName(t.teamName).take(3).uppercase(), Color(Teams.color(t.teamId)), false, pts, t.points, state.favourite?.let { Teams.canonical(it.teamId) } == t.teamId) { state.sheetTeam = t }
             }
         }
     }
@@ -163,7 +165,12 @@ fun TitleFightCard(state: AppState, st: Standings) {
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (l in lines) {
-                            Box(Modifier.tap(onClick = l.open).semantics { contentDescription = "Open ${l.code}" }) { CodeChip(l.code, l.color, large = false) }
+                            Box(Modifier.tap(onClick = l.open).semantics { contentDescription = "Open ${l.code}" + if (l.fav) ", your pick" else "" }) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (l.fav) Text("★", style = inter(12.sp, FontWeight.Bold, C.Warning), modifier = Modifier.padding(end = 2.dp))
+                                    CodeChip(l.code, l.color, large = false)
+                                }
+                            }
                         }
                     }
                     FightChart(lines, key = teams)
@@ -224,12 +231,12 @@ private fun FightChart(lines: List<FightLine>, key: Boolean) {
                         drawPath(
                             path, l.color,
                             style = Stroke(
-                                2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                                (if (l.fav) 3.6.dp else 2.2.dp).toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
                                 pathEffect = if (l.dashed) PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx())) else null,
                             ),
                         )
                         val (lr, lv) = l.points.last()
-                        drawCircle(l.color, 3.5.dp.toPx(), Offset(x(lr), y(lv)))
+                        drawCircle(l.color, (if (l.fav) 5f else 3.5f).dp.toPx(), Offset(x(lr), y(lv)))
                     }
                 }
                 sel?.let { r ->

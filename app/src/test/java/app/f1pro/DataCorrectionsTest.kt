@@ -84,4 +84,14 @@ class DataCorrectionsTest {
         assertNull(alone.days(now))
         assertTrue(alone.finished == 2026)
     }
+
+    @Test
+    fun headlinesAboutYourDriver() {
+        val f = app.f1pro.data.Favourite("Andrea Kimi", "Antonelli", "mercedes", "Mercedes")
+        assertTrue(f.mentionedIn("Antonelli takes pole in Austin"))
+        assertTrue(f.mentionedIn("Why ANTONELLI's start matters"))
+        assertTrue(!f.mentionedIn("Mercedes upgrade explained"))
+        val h = app.f1pro.data.Favourite("Nico", "Hülkenberg", "audi", "Audi")
+        assertTrue(h.mentionedIn("Hulkenberg scores again"))
+    }
 }

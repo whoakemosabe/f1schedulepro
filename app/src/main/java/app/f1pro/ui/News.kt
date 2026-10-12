@@ -206,16 +206,31 @@ fun NewsPage(state: AppState, listState: LazyListState) {
                 } else {
                     itemsIndexed(items, key = { i, n -> "$i|${n.link}" }) { i, n ->
                         val featured = i == 0 && sort == "newest"
+                        // Stories about your driver wear their team colour and a star.
+                        val fav = state.favourite
+                        val mine = remember(n.title, fav) { fav != null && (fav.mentionedIn(n.title) || fav.mentionedIn(n.excerpt.take(200))) }
+                        val favColor = fav?.let { Color(app.f1pro.data.Teams.color(it.teamId)) } ?: C.Highlight
                         Column(
                             Modifier
                                 .fillMaxWidth()
                                 .alpha(if (refreshing) 0.4f else 1f)
-                                .glassCard(edge = if (featured) C.Accent else C.Highlight.copy(alpha = 0.3f), fill = if (featured) androidx.compose.ui.graphics.lerp(C.Card, C.Accent, 0.05f) else C.Card)
+                                .glassCard(
+                                    edge = when { featured -> C.Accent; mine -> favColor.copy(alpha = 0.7f); else -> C.Highlight.copy(alpha = 0.3f) },
+                                    fill = when {
+                                        featured -> androidx.compose.ui.graphics.lerp(C.Card, C.Accent, 0.05f)
+                                        mine -> androidx.compose.ui.graphics.lerp(C.Card, favColor, 0.07f)
+                                        else -> C.Card
+                                    },
+                                )
                                 .pressable { openUrl(context, n.link) }
                                 .padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (featured) Text("LATEST", style = inter(10.sp, FontWeight.Bold, C.AccentText, 0.1f))
+                            if (featured || mine) Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (featured) Text("LATEST", style = inter(10.sp, FontWeight.Bold, C.AccentText, 0.1f))
+                                if (featured && mine) Text("  ·  ", style = inter(10.sp, color = C.BorderLight))
+                                if (mine) Text("★ ${fav!!.familyName.uppercase()}", style = inter(10.sp, FontWeight.Bold, readable(favColor), 0.1f))
+                            }
                             Text(
                                 n.title,
                                 style = inter(if (featured) 15.sp else 14.sp, FontWeight.SemiBold, C.Text).copy(lineHeight = if (featured) 20.sp else 19.sp),

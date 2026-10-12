@@ -444,6 +444,14 @@ class AppState(context: Context, private val scope: CoroutineScope) {
         if (System.currentTimeMillis() - repo.lastCalendarCheck() > 6 * HOUR_MS) refreshCalendar()
         val st = standings
         if (st == null || System.currentTimeMillis() - st.fetchedAt > 30 * MIN_MS) loadStandings()
+        else scope.launch {
+            // The post-race refresh may have saved newer standings while the app was away.
+            val saved = withContext(Dispatchers.IO) { repo.cachedStandings() }
+            val now = standings
+            if (saved != null && now != null && saved.fetchedAt > now.fetchedAt) {
+                standings = seasonStats[saved.season]?.let { saved.copy(drivers = app.f1pro.data.DriverStats.withCodes(saved.drivers, it)) } ?: saved
+            }
+        }
         scope.launch(Dispatchers.IO) {
             try { Ticker.schedule(context) } catch (e: Exception) { }
             try { Widgets.updateAll(context) } catch (e: Exception) { }
