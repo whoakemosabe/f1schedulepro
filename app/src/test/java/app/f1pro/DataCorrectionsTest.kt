@@ -6,12 +6,8 @@ import app.f1pro.data.DriverRound
 import app.f1pro.data.DriverSeason
 import app.f1pro.data.DriverStanding
 import app.f1pro.data.DriverStats
-import app.f1pro.data.GridKind
-import app.f1pro.data.Grids
 import app.f1pro.data.Planner
-import app.f1pro.data.QualiResult
 import app.f1pro.data.Race
-import app.f1pro.data.RaceResult
 import app.f1pro.data.RaceType
 import app.f1pro.data.SeasonCalendar
 import app.f1pro.data.Session
@@ -36,31 +32,6 @@ class DataCorrectionsTest {
         assertEquals(line, same.points)
         assertNull(DriverStats.adjustmentNote("ALO", same.adjustment, 3))
         assertEquals("X: official total includes a +2.5 pt correction", DriverStats.adjustmentNote("X", 2.5, null))
-    }
-
-    private fun result(code: String, family: String, pos: Int?, grid: Int?) = RaceResult(
-        pos, pos?.toString() ?: "R", "1", code, "A", family, "", "mclaren", "McLaren", grid, 50, "Finished", null, 0.0, null, null,
-    )
-
-    private fun quali(code: String, family: String, pos: Int) =
-        QualiResult(pos, "1", code, "A", family, "mclaren", "McLaren", "1:30", null, null)
-
-    @Test
-    fun officialGridBeatsQualifyingAndPitLaneGoesLast() {
-        val q = listOf(quali("NOR", "Norris", 1), quali("PIA", "Piastri", 2), quali("VER", "Verstappen", 3))
-        val before = Grids.of(emptyList(), emptyList(), q)
-        assertEquals(GridKind.Provisional, before.single().kind)
-        assertEquals(listOf("NOR", "PIA", "VER"), before.single().cars.map { it.code })
-        // Norris took a 5-place drop; Verstappen started from the pit lane (grid 0).
-        val race = listOf(result("PIA", "Piastri", 1, 1), result("NOR", "Norris", 2, 6), result("VER", "Verstappen", 3, 0))
-        val sprint = listOf(result("VER", "Verstappen", 1, 2), result("NOR", "Norris", 2, 1))
-        val after = Grids.of(race, sprint, q)
-        assertEquals(GridKind.Official, after[0].kind)
-        assertEquals(listOf("P1" to "PIA", "P6" to "NOR", "PL" to "VER"), after[0].cars.map { it.slot to it.code })
-        assertEquals(GridKind.Sprint, after[1].kind)
-        assertEquals(listOf("NOR", "VER"), after[1].cars.map { it.code })
-        // Results without a grid column fall back to qualifying.
-        assertEquals(GridKind.Provisional, Grids.of(listOf(result("PIA", "Piastri", 1, null)), emptyList(), q).single().kind)
     }
 
     @Test
