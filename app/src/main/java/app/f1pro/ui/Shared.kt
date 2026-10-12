@@ -37,20 +37,16 @@ fun Modifier.sharedRaceElement(raceKey: String, part: String, enabled: Boolean =
     return with(s) { this@sharedRaceElement.sharedElement(rememberSharedContentState("race-$part-$raceKey"), a) }
 }
 
-/**
- * The race page's other cards, as the card opens into the page: each slides up a little and
- * fades in, one after another, instead of all appearing at once. [index] sets the order.
- */
+/** The race page's other cards, as the card opens into the page: one smooth fade, all together. */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun Modifier.enterStagger(index: Int): Modifier {
     val a = LocalAnimScope.current ?: return this
-    val delay = 150 + index * 70
+    // Everything below the hero fades in together, once, while the card grows into the page:
+    // no per-card delays or slides (they made the page judder as it opened).
     return with(a) {
         this@enterStagger.animateEnterExit(
-            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(320, delayMillis = delay)) +
-                androidx.compose.animation.slideInVertically(
-                    androidx.compose.animation.core.tween(420, delayMillis = delay, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                ) { it / 4 },
+            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260, delayMillis = 120)),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)),
         )
     }
