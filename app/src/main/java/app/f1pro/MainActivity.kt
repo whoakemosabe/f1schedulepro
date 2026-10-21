@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.core.graphics.drawable.toDrawable
 import app.f1pro.ui.AppState
 import app.f1pro.ui.C
 import app.f1pro.ui.F1App
@@ -72,7 +73,7 @@ class MainActivity : ComponentActivity() {
             C.dark = dark
             LaunchedEffect(dark) {
                 barStyle(dark)
-                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(C.Bg.toArgb()))
+                window.setBackgroundDrawable(C.Bg.toArgb().toDrawable())
             }
             // Android 13+ remembers which launch screen to show next time, so it matches the
             // theme setting instead of always being dark.

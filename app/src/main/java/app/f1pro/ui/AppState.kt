@@ -94,7 +94,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
     // Reminder settings mirrored as state so the Settings screen redraws.
     var alertsOn by mutableStateOf(prefs.alertsOn)
         private set
-    var leadMinutes by mutableStateOf(prefs.leadMinutes)
+    var leadMinutes by androidx.compose.runtime.mutableIntStateOf(prefs.leadMinutes)
     var countdownOn by mutableStateOf(prefs.countdownOn)
         private set
     var alertWhich by mutableStateOf(prefs.alertWhich)

@@ -122,7 +122,7 @@ private fun Switch(on: Boolean, onClick: () -> Unit) {
                 onClick()
             },
     ) {
-        Box(Modifier.offset(x = x, y = 4.dp).size(20.dp).clip(CircleShape).background(C.Text))
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 4.dp.roundToPx()) }.size(20.dp).clip(CircleShape).background(C.Text))
     }
 }
 
@@ -630,7 +630,7 @@ private fun WidgetsSettings(state: AppState) {
     val context = LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
     val awm = AppWidgetManager.getInstance(context)
-    var tick by remember { mutableStateOf(0) }
+    var tick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { tick++ }
     val now = rememberNow(60_000)
     val next = remember(state.seasons, now / 60_000) { Planner.next(state.seasons, now) }

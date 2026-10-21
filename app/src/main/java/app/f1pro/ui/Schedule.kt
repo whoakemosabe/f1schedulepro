@@ -114,7 +114,7 @@ fun SchedulePage(state: AppState, listState: LazyListState) {
 
     // The race the page is showing (it changes as you swipe between races): back shrinks into
     // that race's card, so the list is scrolled to it first if it's off screen.
-    var shownPage by rememberSaveable { mutableStateOf(sel ?: 0) }
+    var shownPage by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(sel ?: 0) }
     fun prepareReturn() {
         val key = races.getOrNull(shownPage)?.key ?: return
         if (listState.layoutInfo.visibleItemsInfo.none { it.key == key }) {
@@ -393,7 +393,7 @@ private fun RaceDetailPager(
     val scope = rememberCoroutineScope()
     val view = androidx.compose.ui.platform.LocalView.current
     // A tick each time a swipe lands on another race.
-    var lastPage by remember { mutableStateOf(start) }
+    var lastPage by remember { androidx.compose.runtime.mutableIntStateOf(start) }
     LaunchedEffect(pager.settledPage) {
         if (pager.settledPage != lastPage) Haptics.segment(view)
         lastPage = pager.settledPage
@@ -804,7 +804,7 @@ private fun SessionBell(state: AppState, race: Race, session: String, note: (Bel
             .tap {
                 when {
                     !master -> note(BellNote("Reminders are off in Settings", undo = null, settings = true))
-                    !on && !app.f1pro.work.Alerts.canNotify(context) && android.os.Build.VERSION.SDK_INT >= 33 ->
+                    !on && !app.f1pro.work.Alerts.canNotify(context) ->
                         ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                     else -> flip()
                 }

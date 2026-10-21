@@ -303,7 +303,7 @@ fun SlidingSegments(
         val segW = maxWidth / options.size
         Box(
             Modifier
-                .offset(x = segW * pos)
+                .offset { androidx.compose.ui.unit.IntOffset((segW * pos).roundToPx(), 0) }
                 .width(segW)
                 .height(height - 6.dp)
                 .clip(RoundedCornerShape(9.dp))
@@ -342,7 +342,7 @@ fun SlidingSegments(
 
 /** Lays children left to right and wraps to a new line when a row is full. */
 @Composable
-fun Wrap(gap: Dp, rowGap: Dp = gap, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun Wrap(gap: Dp, modifier: Modifier = Modifier, rowGap: Dp = gap, content: @Composable () -> Unit) {
     androidx.compose.ui.layout.Layout(content, modifier) { measurables, constraints ->
         val g = gap.roundToPx()
         val rg = rowGap.roundToPx()

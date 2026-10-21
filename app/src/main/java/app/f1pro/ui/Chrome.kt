@@ -231,7 +231,7 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
                 }
                 Box(
                     Modifier
-                        .offset(x = x)
+                        .offset { androidx.compose.ui.unit.IntOffset(x.roundToPx(), 0) }
                         .width(tabW * 0.7f)
                         .height(3.dp)
                         .shadow(8.dp, RoundedCornerShape(50), ambientColor = C.Accent, spotColor = C.Accent)
