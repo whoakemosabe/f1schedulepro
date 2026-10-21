@@ -64,6 +64,8 @@ class NextSessionTile : TileService() {
         tile.updateTile()
     }
 
+    // The Intent version is only used below Android 14, where it's the right call.
+    @android.annotation.SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         super.onClick()
         val intent = Intent(this, MainActivity::class.java)
