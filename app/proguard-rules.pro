@@ -6,11 +6,15 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# Workers are created by WorkManager from their class name.
--keep class * extends androidx.work.ListenableWorker { <init>(...); }
+# Workers: WorkManager ships its own rule that keeps worker constructors, so none needed here.
 
-# Enum names are saved in state (tab keys, prefs).
--keepclassmembers enum app.f1pro.** { *; }
+# Enum names are saved in state (tab keys, prefs): keep the constants' names and the
+# values()/valueOf() lookups, but let R8 optimise the rest of each enum.
+-keepclassmembers,allowoptimization enum app.f1pro.** {
+    <fields>;
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
 
 # OkHttp's optional TLS providers aren't on Android.
 -dontwarn org.bouncycastle.**

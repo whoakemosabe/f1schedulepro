@@ -18,12 +18,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -74,7 +76,7 @@ fun Header(state: AppState) {
             .statusBarsPadding()
     ) {
         Row(
-            Modifier.fillMaxWidth().height(HeaderRow).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().heightIn(min = HeaderRow).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -98,7 +100,7 @@ fun Header(state: AppState) {
         if (live != null) {
             FadeLine(C.Live.copy(alpha = 0.4f))
             Row(
-                Modifier.fillMaxWidth().height(SubHeaderRow).background(C.Live.copy(alpha = 0.1f)).padding(horizontal = 16.dp),
+                Modifier.fillMaxWidth().heightIn(min = SubHeaderRow).background(C.Live.copy(alpha = 0.1f)).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -119,7 +121,7 @@ fun Header(state: AppState) {
             if (next.session.start > now) {
                 FadeLine(C.Highlight.copy(alpha = 0.3f))
                 Row(
-                    Modifier.fillMaxWidth().height(SubHeaderRow).background(C.Highlight.copy(alpha = 0.05f)).padding(horizontal = 16.dp),
+                    Modifier.fillMaxWidth().heightIn(min = SubHeaderRow).background(C.Highlight.copy(alpha = 0.05f)).padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
                 ) {
@@ -170,7 +172,7 @@ private fun HeaderCountdown(start: Long) {
     val cd = Fmt.countdown(start, now)
     Row(verticalAlignment = Alignment.CenterVertically) {
         val digit = orbitron(12.sp, FontWeight.Bold, C.Highlight)
-        val unit = inter(9.sp, FontWeight.SemiBold, C.TextMuted)
+        val unit = inter(10.sp, FontWeight.SemiBold, C.TextMuted)
         if (cd.days > 0) {
             FlipText(cd.days.toString(), digit); Text("D", style = unit, modifier = Modifier.padding(start = 1.dp, end = 3.dp))
         }
@@ -191,7 +193,10 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
         else Box(Modifier.matchParentSize().background(C.Bar))
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             FadeLine(C.Accent.copy(alpha = 0.5f))
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // On a wide screen the tabs stay grouped in the middle (the bar itself still runs
+            // the full width) instead of spreading hundreds of dp apart.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            BoxWithConstraints(Modifier.widthIn(max = MaxPageWidth).fillMaxWidth()) {
                 val tabW = maxWidth / tabs.size
                 val idx = tabs.indexOf(state.tab)
                 // The PWA's bouncy sliding indicator.
@@ -233,6 +238,7 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
                         .clip(RoundedCornerShape(50))
                         .background(C.Accent)
                 )
+            }
             }
         }
     }

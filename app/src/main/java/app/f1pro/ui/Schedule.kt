@@ -508,7 +508,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(
-                start = 12.dp, end = 12.dp,
+                start = pageGutter(), end = pageGutter(),
                 top = 12.dp + LocalChrome.current.calculateTopPadding(),
                 bottom = 12.dp + LocalChrome.current.calculateBottomPadding(),
             ),
@@ -731,6 +731,12 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
                             Modifier.heightIn(min = 44.dp).tap { note.undo.invoke(); bellNote = null }.padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) { Text("Undo", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
+                    } else if (note?.allow == true) {
+                        val ctx = LocalContext.current
+                        Box(
+                            Modifier.heightIn(min = 44.dp).tap { bellNote = null; app.f1pro.work.Alerts.openSettings(ctx) }.padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("Allow", style = inter(13.sp, FontWeight.Bold, C.Highlight)) }
                     } else if (note?.settings == true) {
                         Box(
                             Modifier.heightIn(min = 44.dp).tap { bellNote = null; state.tab = Tab.Settings }.padding(horizontal = 14.dp),
@@ -754,7 +760,7 @@ private fun RaceDetail(state: AppState, race: Race, globalNextStart: Long?, shar
 }
 
 /** The confirmation under the session list after a bell tap. */
-private class BellNote(val text: String, val undo: (() -> Unit)?, val settings: Boolean = false)
+private class BellNote(val text: String, val undo: (() -> Unit)?, val settings: Boolean = false, val allow: Boolean = false)
 
 /**
  * The bell on one session row: this session's reminder, on or off. Settings decides the
@@ -783,7 +789,7 @@ private fun SessionBell(state: AppState, race: Race, session: String, note: (Bel
     }
     val ask = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) flip() else note(BellNote("Allow notifications for F1 Pro to get reminders", null)) }
+    ) { granted -> if (granted) flip() else note(BellNote("Notifications are blocked for F1 Pro", null, allow = true)) }
     val color = when {
         !master -> C.TextMuted.copy(alpha = 0.5f)
         on -> C.AccentText

@@ -716,7 +716,7 @@ private fun RoundRow(state: AppState, year: Int, r: DriverRound, color: Color) {
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(44.dp)) {
             Text(Fmt.points(r.allPoints), style = orbitron(12.sp, FontWeight.Bold, if (r.allPoints > 0) C.Text else C.TextMuted))
-            if (r.sprintPoints > 0) Text("+" + Fmt.points(r.sprintPoints) + " spr", style = inter(9.sp, color = C.TextMuted))
+            if (r.sprintPoints > 0) Text("+" + Fmt.points(r.sprintPoints) + " spr", style = inter(10.sp, color = C.TextMuted))
         }
         if (race != null) {
             Spacer(Modifier.width(4.dp))
@@ -986,7 +986,7 @@ private fun RowScope.StatTile(label: String, value: String) {
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Text(value, style = orbitron(16.sp, FontWeight.Bold, C.Text), maxLines = 1)
-        Text(label, style = inter(9.sp, FontWeight.SemiBold, C.TextMuted, 0.08f), maxLines = 1)
+        Text(label, style = inter(10.sp, FontWeight.SemiBold, C.TextMuted, 0.08f), maxLines = 1)
     }
 }
 

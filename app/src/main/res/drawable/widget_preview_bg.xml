@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widgets' card: the app's navy, rounded like the real widget (22dp). Preview only. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#F20C0F1A" />
+    <corners android:radius="22dp" />
+</shape>

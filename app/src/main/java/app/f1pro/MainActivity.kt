@@ -35,25 +35,27 @@ class MainActivity : ComponentActivity() {
         const val ACTION_NEXT_RACE = "app.f1pro.NEXT_RACE"
         const val ACTION_STANDINGS = "app.f1pro.STANDINGS"
         const val ACTION_NEWS = "app.f1pro.NEWS"
+
+        /** "2026-18" or "2026-test-1", as Race.key makes them. */
+        private val RACE_KEY = Regex("""^\d{4}-(test-)?\d{1,2}$""")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CrashLog.install(this)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        // System bar icons for the saved theme from the first frame (they used to start as the
+        // dark theme's and flip once the app had loaded, a visible flash in Light).
+        barStyle(startsDark())
         Alerts.createChannels(this)
         Scheduler.ensure(this)
         handleIntent(intent)
         setContent {
-            // Narrow phones see the same layout scaled down a little rather than wrapping;
-            // very large system text is capped so rows stay on one line.
+            // Narrow phones see the same layout scaled down a little rather than wrapping.
+            // System text size is followed up to 1.5x (the old cap was 1.15x, which ignored
+            // most "large text" settings); beyond that rows would start to clip.
             val base = LocalDensity.current
             val widthDp = LocalConfiguration.current.screenWidthDp
             val scale = (widthDp / 400f).coerceIn(0.88f, 1f)
-            val scaled = Density(base.density * scale, base.fontScale.coerceAtMost(1.15f))
+            val scaled = Density(base.density * scale, base.fontScale.coerceAtMost(1.5f))
             val scope = rememberCoroutineScope()
             val s = remember { AppState(this, scope) }
             state = s
@@ -70,16 +72,39 @@ class MainActivity : ComponentActivity() {
             }
             C.dark = dark
             LaunchedEffect(dark) {
-                enableEdgeToEdge(
-                    statusBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                    navigationBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                )
+                barStyle(dark)
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(C.Bg.toArgb()))
+            }
+            // Android 13+ remembers which launch screen to show next time, so it matches the
+            // theme setting instead of always being dark.
+            LaunchedEffect(s.theme) {
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    splashScreen.setSplashScreenTheme(
+                        when (s.theme) {
+                            "light" -> R.style.Theme_F1Pro_Light
+                            "system" -> R.style.Theme_F1Pro_System
+                            else -> R.style.Theme_F1Pro
+                        }
+                    )
+                }
             }
             CompositionLocalProvider(LocalDensity provides scaled) {
                 F1Theme { F1App(s) }
             }
         }
+    }
+
+    /** Dark or light, from the saved theme setting, before any screen has loaded. */
+    private fun startsDark(): Boolean = when (Prefs(this).theme) {
+        "light" -> false
+        "system" -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        else -> true
+    }
+
+    private fun barStyle(dark: Boolean) {
+        val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -106,8 +131,11 @@ class MainActivity : ComponentActivity() {
             ACTION_NEWS -> openTab(app.f1pro.ui.Tab.News)
         }
         intent.action = null
-        intent.getStringExtra(Alerts.EXTRA_RACE)?.let { key ->
+        // This screen is open to other apps (it's the launcher entry), so only a race key in
+        // the app's own shape is followed; anything else is dropped.
+        intent.getStringExtra(Alerts.EXTRA_RACE)?.takeIf { RACE_KEY.matches(it) }.also {
             intent.removeExtra(Alerts.EXTRA_RACE)
+        }?.let { key ->
             val s = state
             if (s != null) s.openRaceKey = key else pendingRace = key
         }

@@ -50,6 +50,24 @@ object Alerts {
         )
     }
 
+    /**
+     * The app's page in system notification settings. Once notifications have been refused
+     * twice Android stops showing the prompt, so this is the only way back.
+     */
+    fun openSettings(context: Context) {
+        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+    }
+
     fun canNotify(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==

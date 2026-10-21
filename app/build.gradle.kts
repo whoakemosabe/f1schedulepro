@@ -18,7 +18,7 @@ android {
     defaultConfig {
         applicationId = "app.f1pro"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = runNumber
         versionName = "2.0.$runNumber"
     }
@@ -59,8 +59,11 @@ android {
         buildConfig = true
     }
     lint {
+        // Lint runs as its own CI step (a report, never a failed build), not inside assembleRelease.
         checkReleaseBuilds = false
         abortOnError = false
+        textReport = true
+        textOutput = file("build/reports/lint.txt")
     }
     testOptions {
         unitTests.isReturnDefaultValues = true

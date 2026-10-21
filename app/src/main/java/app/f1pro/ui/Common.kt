@@ -404,13 +404,30 @@ val SectionRowHeight = 40.dp
 /** The gap between cards, the same on every page. */
 val PageGap = 10.dp
 
+/**
+ * The widest a page's column of cards gets. On a phone the cards fill the screen as before; on
+ * a tablet (or an unfolded phone, or landscape) they sit centred at this width instead of
+ * stretching edge to edge, while the page still scrolls from anywhere across the screen.
+ */
+val MaxPageWidth = 640.dp
+
+/** Side padding that keeps a page's content at most [MaxPageWidth] wide, and at least [min]. */
+@Composable
+fun pageGutter(min: Dp = 12.dp): Dp {
+    val width = with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp()
+    }
+    return maxOf(min, (width - MaxPageWidth) / 2)
+}
+
 /** The page's own padding plus room for the header and tab bar. The same on every page. */
 @Composable
 fun pagePadding(horizontal: Dp = 12.dp, top: Dp = 12.dp, bottom: Dp = 12.dp): androidx.compose.foundation.layout.PaddingValues {
     val chrome = LocalChrome.current
+    val side = pageGutter(horizontal)
     return androidx.compose.foundation.layout.PaddingValues(
-        start = horizontal,
-        end = horizontal,
+        start = side,
+        end = side,
         top = top + chrome.calculateTopPadding(),
         bottom = bottom + chrome.calculateBottomPadding(),
     )

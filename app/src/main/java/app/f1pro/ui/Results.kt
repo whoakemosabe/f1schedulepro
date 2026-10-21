@@ -92,7 +92,7 @@ fun PodiumBlock(race: List<RaceResult>, fav: Favourite?) {
                 ) {
                     Text("$pos", style = orbitron(if (pos == 1) 26.sp else 21.sp, FontWeight.Black, C.Text))
                     if (r?.fastestRank == 1) {
-                        Text("FASTEST LAP", style = inter(9.sp, FontWeight.Bold, Purple, 0.08f))
+                        Text("FASTEST LAP", style = inter(10.sp, FontWeight.Bold, Purple, 0.08f))
                     }
                 }
             }
@@ -345,6 +345,6 @@ private fun Badge(@androidx.annotation.DrawableRes icon: Int, text: String, colo
     ) {
         Ic(icon, color, 9.dp)
         Spacer(Modifier.width(3.dp))
-        Text(text, style = inter(9.sp, FontWeight.Bold, color, 0.05f), maxLines = 1)
+        Text(text, style = inter(10.sp, FontWeight.Bold, color, 0.05f), maxLines = 1)
     }
 }

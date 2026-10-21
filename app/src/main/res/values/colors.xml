@@ -1,5 +1,9 @@
 <resources>
     <color name="bg">#FF0C0F1A</color>
+    <!-- The light theme's background, and the one that follows the phone (light here, dark in
+         values-night). Used by the launch screen for the Light and System theme settings. -->
+    <color name="bg_light">#FFECEFF6</color>
+    <color name="bg_system">#FFECEFF6</color>
     <color name="f1_red">#FFE10600</color>
     <color name="highlight">#FF00D4FF</color>
     <color name="text">#FFF0F2FF</color>

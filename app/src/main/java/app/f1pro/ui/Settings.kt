@@ -258,13 +258,13 @@ fun SettingsPage(state: AppState) {
         }
 
         // ── Reminders ──
+        val canNotify = rememberCanNotify()
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                state.setAlerts(true)
-                Alerts.postTest(context, null)
-            }
+            // Refused (or refused before, so Android didn't even ask): reminders still count as
+            // on, so the "blocked" note and its settings button show instead of a dead switch.
+            state.setAlerts(true)
+            if (granted) Alerts.postTest(context, null)
         }
-        val canNotify = Alerts.canNotify(context)
         val active = state.alertsOn && canNotify
         SettingsCard("Notifications", if (active) R.drawable.lc_bell else R.drawable.lc_bell_off, if (active) C.Highlight else C.TextMuted) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,11 +288,7 @@ fun SettingsPage(state: AppState) {
             if (state.alertsOn && !canNotify) {
                 Small("Notifications are blocked for F1 Pro. Allow them in system settings to get reminders.", C.Warning)
                 ActionButton("Open notification settings", R.drawable.lc_settings) {
-                    context.startActivity(
-                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
+                    Alerts.openSettings(context)
                 }
             }
             if (active) {
@@ -523,8 +519,8 @@ private fun FavouriteSettings(state: AppState) {
     var open by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (state.standings == null) state.loadStandings() }
     val context = LocalContext.current
-    var canNotify by remember { mutableStateOf(Alerts.canNotify(context)) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { canNotify = it }
+    val canNotify = rememberCanNotify()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     SettingsCard("Your driver", R.drawable.lc_star, if (fav != null) C.Highlight else C.TextMuted) {
         Box {
@@ -564,6 +560,10 @@ private fun FavouriteSettings(state: AppState) {
                         if (!canNotify && Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
+            }
+            if (state.resultAlerts && !canNotify) {
+                Small("Notifications are blocked for F1 Pro. Allow them in system settings to hear how they did.", C.Warning)
+                ActionButton("Open notification settings", R.drawable.lc_settings) { Alerts.openSettings(context) }
             }
             Small("Highlighted in standings, results and the Your driver widget.")
         } else {
@@ -721,4 +721,17 @@ private fun WidgetsSettings(state: AppState) {
         }
         Small("Your phone asks where to put it. Resize them on the home screen.")
     }
+}
+
+/**
+ * Whether F1 Pro may post notifications, read again every time the app comes back to the
+ * front (the permission prompt and system settings both pause it), so the switches and the
+ * "blocked" notes follow what was chosen there.
+ */
+@Composable
+private fun rememberCanNotify(): Boolean {
+    val context = LocalContext.current
+    var resumes by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { resumes++ }
+    return remember(resumes) { Alerts.canNotify(context) }
 }

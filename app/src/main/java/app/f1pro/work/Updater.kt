@@ -154,10 +154,12 @@ object Updater {
             val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.sizeBytes
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }
             val out = File(dir, "f1pro.apk")
+            // Written to a part file first: a half-finished download never looks ready.
+            val part = File(dir, "f1pro-part.apk").apply { delete() }
+            var done = 0L
             conn.inputStream.use { input ->
-                out.outputStream().use { output ->
+                part.outputStream().use { output ->
                     val buf = ByteArray(64 * 1024)
-                    var done = 0L
                     while (true) {
                         val n = input.read(buf)
                         if (n < 0) break
@@ -168,8 +170,39 @@ object Updater {
                 }
             }
             conn.disconnect()
+            if (total > 0 && done != total) {
+                part.delete()
+                throw IOException("Download incomplete ($done of $total bytes)")
+            }
+            verify(context, part, release.version)
+            out.delete()
+            if (!part.renameTo(out)) throw IOException("Couldn't save the update")
             out
         }
+
+    /**
+     * Checks the downloaded file is a whole APK of this app and the version it should be,
+     * before the system installer sees it (it would only say "problem parsing the package").
+     * The installer still checks the signature itself.
+     */
+    private fun verify(context: Context, apk: File, expected: String) {
+        val info = try {
+            context.packageManager.getPackageArchiveInfo(apk.path, 0)
+        } catch (e: Exception) { null }
+        if (info == null) {
+            apk.delete()
+            throw IOException("The download is damaged")
+        }
+        if (info.packageName != context.packageName) {
+            apk.delete()
+            throw IOException("The download isn't F1 Pro")
+        }
+        val v = info.versionName.orEmpty()
+        if (isNewer(expected, v) || !isNewer(v, installedVersion(context))) {
+            apk.delete()
+            throw IOException("The download is the wrong version ($v)")
+        }
+    }
 
     /** True if the installer opened; false if the app first needs "install unknown apps". */
     fun install(context: Context, apk: File): Boolean {

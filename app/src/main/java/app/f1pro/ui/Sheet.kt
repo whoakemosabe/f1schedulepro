@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -145,6 +146,8 @@ fun SlideSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Uni
             Modifier
                 .align(Alignment.BottomCenter)
                 .statusBarsPadding()
+                // A tablet gets a centred panel rather than one the full width of the screen.
+                .widthIn(max = MaxPageWidth + 80.dp)
                 .fillMaxWidth()
                 .heightIn(max = maxHeight)
                 .onSizeChanged { heightPx = it.height.toFloat() }

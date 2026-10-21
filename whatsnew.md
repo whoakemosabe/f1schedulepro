@@ -4,8 +4,10 @@ Write this list for each release: short, exciting, one line each, written for pe
 the app. It becomes the "Highlights" in the release notes and the app's "What's new" popup.
 Only included when this file changed since the last release.
 
-- Update pop-up now shows how many updates you're behind, with the highlights from all of them
-- Race results get badges: fastest lap, and the biggest mover from the grid
-- Your driver stands out everywhere: starred and bolder in the title fight, and news stories about them glow in their team colour
-- Standings refresh on their own about two hours after every race and sprint, so they're right when you open the app
-- Starting grid card removed to keep race pages tidy
+- Swipe back from a race page now animates the way Android intended
+- Notifications blocked? The switches now say so and take you straight to the setting
+- On a tablet, pages sit in a neat centred column instead of stretching edge to edge
+- Widgets show a real preview when you add them from the widget picker
+- Larger system text sizes are now respected (up to 1.5×), and the tiniest labels are easier to read
+- The launch screen and status bar match your Light or System theme from the very first frame
+- Safer updates: a broken or incomplete download is caught before it reaches the installer

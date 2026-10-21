@@ -105,6 +105,20 @@ jobs:
           kb=$(( $(stat -c %s app/build/outputs/apk/release/app-release.apk) / 1024 ))
           echo "::notice::Build: $v, APK ${kb} KB"
 
+      - name: Lint report
+        # Android's own checks (manifest, API levels, resources, accessibility). A report only:
+        # it never fails the build. The full list is in the run summary.
+        continue-on-error: true
+        shell: bash
+        run: |
+          ./gradlew lintDebug > /dev/null 2>&1 || true
+          f=app/build/reports/lint.txt
+          [ -f "$f" ] || { echo "::warning::No lint report"; exit 0; }
+          summary=$(grep -E '^[0-9]+ errors?, [0-9]+ warnings?' "$f" | tail -1)
+          echo "::notice title=Lint::${summary:-No issues}"
+          grep -E ': Error: ' "$f" | head -10 | sed 's#^.*/app/src/#app/src/#' | while IFS= read -r l; do echo "::warning title=Lint error::$l"; done
+          { echo '### Lint'; echo '```'; head -300 "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk f1pro.apk
 

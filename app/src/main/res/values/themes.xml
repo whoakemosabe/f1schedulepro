@@ -4,4 +4,9 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Launch screen themes for the Light and System settings (Android 13+ remembers the one
+         MainActivity picks; see values-v31). Before Android 12 they look like the dark one. -->
+    <style name="Theme.F1Pro.Light" parent="Theme.F1Pro" />
+    <style name="Theme.F1Pro.System" parent="Theme.F1Pro" />
 </resources>

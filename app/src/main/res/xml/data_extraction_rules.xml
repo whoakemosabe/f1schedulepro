@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: settings (theme, clock, your driver, reminders) move to a new phone; the data
+     cache and the last crash report don't (they belong to this phone and refill on their own). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="f1pro.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="f1pro.xml" />
+    </device-transfer>
+</data-extraction-rules>
