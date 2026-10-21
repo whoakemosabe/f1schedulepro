@@ -40,7 +40,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
@@ -62,8 +61,8 @@ import kotlin.math.roundToInt
 fun SlideSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val screenPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.92f).dp
+    val screenPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toFloat()
+    val maxHeight = with(density) { (screenPx * 0.92f).toDp() }
 
     var heightPx by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(screenPx) }

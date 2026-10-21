@@ -208,8 +208,8 @@ private fun QualiHeader() {
     }
 }
 
-private fun rowModifier(isFav: Boolean, color: Color): Modifier =
-    Modifier
+private fun Modifier.resultRow(isFav: Boolean, color: Color): Modifier =
+    this
         .fillMaxWidth()
         .background(if (isFav) color.copy(alpha = 0.12f) else Color.Transparent)
         .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -217,7 +217,7 @@ private fun rowModifier(isFav: Boolean, color: Color): Modifier =
 @Composable
 private fun RaceRow(r: RaceResult, isFav: Boolean, mover: Boolean = false) {
     val color = team(r.constructorId)
-    Row(rowModifier(isFav, color), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.resultRow(isFav, color), verticalAlignment = Alignment.CenterVertically) {
         val label = when (r.positionText) {
             "R" -> "DNF"
             "D", "E" -> "DSQ"
@@ -283,7 +283,7 @@ private fun RaceRow(r: RaceResult, isFav: Boolean, mover: Boolean = false) {
 @Composable
 private fun QualiRow(q: QualiResult, isFav: Boolean, gap: Long?) {
     val color = team(q.constructorId)
-    Row(rowModifier(isFav, color), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.resultRow(isFav, color), verticalAlignment = Alignment.CenterVertically) {
         Text("${q.position ?: "–"}", style = orbitron(13.sp, FontWeight.Bold, C.TextSecondary), modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
         Spacer(Modifier.width(6.dp))
         Box(Modifier.size(width = 3.dp, height = 28.dp).clip(RoundedCornerShape(2.dp)).background(color))

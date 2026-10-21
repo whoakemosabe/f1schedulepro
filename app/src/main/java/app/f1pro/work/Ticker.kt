@@ -81,8 +81,19 @@ class TickReceiver : BroadcastReceiver() {
 /** After a reboot, an app update or a clock change, alarms are gone or wrong: set them again. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // Exported for the system's broadcasts; anything else (another app poking it) is ignored.
+        if (intent.action !in ACTIONS) return
         Scheduler.ensure(context)
         val pending = goAsync()
         Ticker.tickAsync(context) { pending.finish() }
+    }
+
+    private companion object {
+        val ACTIONS = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED, // "android.intent.action.TIME_SET" in the manifest
+            Intent.ACTION_TIMEZONE_CHANGED,
+        )
     }
 }

@@ -1,5 +1,6 @@
 package app.f1pro.ui
 
+import androidx.core.net.toUri
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -71,7 +72,7 @@ import kotlinx.coroutines.delay
 
 /** A Lucide icon from res/drawable, tinted. */
 @Composable
-fun Ic(@DrawableRes id: Int, color: Color, size: Dp = 14.dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
+fun Ic(@DrawableRes id: Int, color: Color, size: Dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
     Icon(painterResource(id), contentDescription = contentDescription, tint = color, modifier = modifier.size(size))
 }
 
@@ -188,7 +189,7 @@ fun FlipText(text: String, style: TextStyle, slot: Float = 0.84f) {
 
 /** A hairline that fades out at both ends. */
 @Composable
-fun FadeLine(color: Color = C.BorderLight, modifier: Modifier = Modifier) {
+fun FadeLine(modifier: Modifier = Modifier, color: Color = C.BorderLight) {
     Box(
         modifier
             .fillMaxWidth()
@@ -264,10 +265,10 @@ fun openUrl(context: Context, url: String) {
             .setDefaultColorSchemeParams(dark)
             .setShowTitle(true)
             .build()
-            .launchUrl(context, Uri.parse(url))
+            .launchUrl(context, url.toUri())
     } catch (e: ActivityNotFoundException) {
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e2: Exception) { }
     } catch (e: Exception) { }
 }

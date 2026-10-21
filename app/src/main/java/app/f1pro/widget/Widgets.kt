@@ -252,11 +252,11 @@ private fun DriverContent(d: DriverData, p: Pal) {
             Box(modifier = GlanceModifier.width(4.dp).fillMaxHeight().background(ColorProvider(team))) {}
             Column(modifier = GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp)) {
                 if (fav == null) {
-                    Text("YOUR DRIVER", style = style(p.muted, 10, FontWeight.Bold))
+                    Text("YOUR DRIVER", style = style(p.muted, 11, FontWeight.Bold))
                     Spacer(GlanceModifier.defaultWeight())
                     Text("Pick one in Settings", style = style(p.text1, 13, FontWeight.Medium))
                 } else {
-                    Text(fav.familyName.uppercase(), style = style(p.muted, 10, FontWeight.Bold), maxLines = 1)
+                    Text(fav.familyName.uppercase(), style = style(p.muted, 11, FontWeight.Bold), maxLines = 1)
                     Spacer(GlanceModifier.defaultWeight())
                     if (row == null) {
                         Text("—", style = style(p.text1, 26, FontWeight.Bold))
@@ -294,7 +294,7 @@ private fun NextContent(context: Context, d: WidgetData, p: Pal) {
                     Text("Next: ${next.session.short} ${d.fmt.day(next.session.start)} ${d.fmt.shortTime(next.session.start)}", style = style(p.muted, 11), maxLines = 1)
                 }
             } else if (next != null) {
-                Text("NEXT SESSION", style = style(p.muted, 10, FontWeight.Bold))
+                Text("NEXT SESSION", style = style(p.muted, 11, FontWeight.Bold))
                 Spacer(GlanceModifier.height(4.dp))
                 Text("${next.race.circuit.flag} ${next.race.name}", style = style(p.text1, 13, FontWeight.Medium), maxLines = 2)
                 Spacer(GlanceModifier.defaultWeight())
@@ -334,7 +334,7 @@ private fun WeekendContent(context: Context, d: WidgetData, p: Pal) {
                 Text("${race.circuit.flag} ", style = style(p.text1, 14))
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(race.name, style = style(p.text1, 13, FontWeight.Bold), maxLines = 1)
-                    Text("${race.label} · ${race.circuit.locality}", style = style(p.muted, 10), maxLines = 1)
+                    Text("${race.label} · ${race.circuit.locality}", style = style(p.muted, 11), maxLines = 1)
                 }
                 if (liveInRace != null) {
                     Text("● LIVE", style = style(p.red, 11, FontWeight.Bold))

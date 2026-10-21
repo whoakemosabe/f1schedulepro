@@ -13,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import app.f1pro.ui.AppState
@@ -53,7 +52,7 @@ class MainActivity : ComponentActivity() {
             // System text size is followed up to 1.5x (the old cap was 1.15x, which ignored
             // most "large text" settings); beyond that rows would start to clip.
             val base = LocalDensity.current
-            val widthDp = LocalConfiguration.current.screenWidthDp
+            val widthDp = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width / base.density
             val scale = (widthDp / 400f).coerceIn(0.88f, 1f)
             val scaled = Density(base.density * scale, base.fontScale.coerceAtMost(1.5f))
             val scope = rememberCoroutineScope()

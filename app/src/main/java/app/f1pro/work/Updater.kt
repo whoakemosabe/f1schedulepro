@@ -1,5 +1,6 @@
 package app.f1pro.work
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -208,7 +209,7 @@ object Updater {
     fun install(context: Context, apk: File): Boolean {
         if (!context.packageManager.canRequestPackageInstalls()) {
             context.startActivity(
-                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri())
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             return false

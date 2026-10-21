@@ -98,7 +98,7 @@ fun Header(state: AppState) {
         }
 
         if (live != null) {
-            FadeLine(C.Live.copy(alpha = 0.4f))
+            FadeLine(color = C.Live.copy(alpha = 0.4f))
             Row(
                 Modifier.fillMaxWidth().heightIn(min = SubHeaderRow).background(C.Live.copy(alpha = 0.1f)).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -119,7 +119,7 @@ fun Header(state: AppState) {
             }
         } else if (next != null) {
             if (next.session.start > now) {
-                FadeLine(C.Highlight.copy(alpha = 0.3f))
+                FadeLine(color = C.Highlight.copy(alpha = 0.3f))
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = SubHeaderRow).background(C.Highlight.copy(alpha = 0.05f)).padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -140,7 +140,7 @@ fun Header(state: AppState) {
                 }
             }
         }
-        FadeLine(C.Accent.copy(alpha = 0.5f))
+        FadeLine(color = C.Accent.copy(alpha = 0.5f))
     }
 }
 
@@ -192,7 +192,7 @@ fun BottomNav(state: AppState, modifier: Modifier = Modifier) {
         if (backdrop != null) GlassBar(backdrop, Modifier.matchParentSize())
         else Box(Modifier.matchParentSize().background(C.Bar))
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            FadeLine(C.Accent.copy(alpha = 0.5f))
+            FadeLine(color = C.Accent.copy(alpha = 0.5f))
             // On a wide screen the tabs stay grouped in the middle (the bar itself still runs
             // the full width) instead of spreading hundreds of dp apart.
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
