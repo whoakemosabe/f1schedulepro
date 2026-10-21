@@ -21,7 +21,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Full history and tags, for the "What's new" list in the release notes.
           fetch-depth: 0
@@ -117,6 +117,10 @@ jobs:
           summary=$(grep -E '^[0-9]+ errors?, [0-9]+ warnings?' "$f" | tail -1)
           echo "::notice title=Lint::${summary:-No issues}"
           grep -E ': Error: ' "$f" | head -10 | sed 's#^.*/app/src/#app/src/#' | while IFS= read -r l; do echo "::warning title=Lint error::$l"; done
+          # Counts per check, and every finding on one line each, as two notices (readable on the
+          # run's page and from the API without opening the summary).
+          echo "::notice title=Lint by check::$(grep -oE '\[[A-Za-z0-9]+\]$' "$f" | sort | uniq -c | sort -rn | sed ':a;N;$!ba;s/\n/%0A/g')"
+          echo "::notice title=Lint findings::$(grep -E ': (Warning|Error|Information|Hint): ' "$f" | sed 's#^.*/app/#app/#' | head -150 | sed ':a;N;$!ba;s/\n/%0A/g')"
           { echo '### Lint'; echo '```'; head -300 "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Name the APK
@@ -140,7 +144,7 @@ jobs:
           echo "::notice title=Live data::$(grep '^- ' "$f" | sed 's/^- //' | sed ':a;N;$!ba;s/\n/%0A/g')"
 
       - name: Keep the APK with the run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: f1pro-apk
           path: f1pro.apk
@@ -172,7 +176,7 @@ jobs:
 
       - name: Publish release
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v2.0.${{ github.run_number }}
           name: F1 Schedule Pro 2.0.${{ github.run_number }}
