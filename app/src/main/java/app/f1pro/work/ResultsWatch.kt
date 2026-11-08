@@ -31,6 +31,7 @@ object ResultsWatch {
     fun schedule(context: Context, seasons: List<SeasonCalendar>, now: Long = System.currentTimeMillis()) {
         val prefs = Prefs(context)
         scheduleStandings(context, seasons, now)
+        schedulePrefetch(context, seasons, now)
         if (prefs.favourite == null || !prefs.resultAlerts) return
         val reported = prefs.reported
         val wm = WorkManager.getInstance(context)
@@ -56,6 +57,34 @@ object ResultsWatch {
     }
 
     internal fun attemptsLeft(run: Int) = run < MAX_ATTEMPTS
+
+    /**
+     * After every qualifying, sprint and race, fetch the weekend's results in the background and
+     * save them, so they're already there when the app or a widget opens. Runs for everyone,
+     * favourite driver or not; first try 35 minutes after the session (when OpenF1 opens it).
+     */
+    private fun schedulePrefetch(context: Context, seasons: List<SeasonCalendar>, now: Long) {
+        val done = Prefs(context).resultsPrefetched
+        val wm = WorkManager.getInstance(context)
+        for (slot in Planner.finishedForReport(seasons, now)) {
+            if (slot.key in done) continue
+            val delay = (slot.session.end + 35 * MIN_MS - now).coerceAtLeast(0)
+            val request = OneTimeWorkRequestBuilder<ResultsPrefetchWorker>()
+                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.LINEAR, 20, TimeUnit.MINUTES)
+                .setInputData(
+                    workDataOf(
+                        "key" to slot.key,
+                        "season" to slot.race.season,
+                        "round" to slot.race.round,
+                        "session" to slot.session.name,
+                    )
+                )
+                .build()
+            wm.enqueueUniqueWork("prefetch-${slot.key}", ExistingWorkPolicy.KEEP, request)
+        }
+    }
 
     /**
      * About two hours after every race (and sprint), fetch the standings by themselves, so the
@@ -134,6 +163,32 @@ class ResultsWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             try { repo.fetchStandings() } catch (e: Exception) { }
             try { Widgets.updateAll(ctx) } catch (e: Exception) { }
         }
+        return Result.success()
+    }
+}
+
+/** Fetches one session's results in the background; retries until they're published. */
+class ResultsPrefetchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val ctx = applicationContext
+        val prefs = Prefs(ctx)
+        val key = inputData.getString("key") ?: return Result.success()
+        if (key in prefs.resultsPrefetched) return Result.success()
+        val season = inputData.getInt("season", 0)
+        val round = inputData.getInt("round", 0)
+        val session = inputData.getString("session") ?: return Result.success()
+        val repo = Repo(ctx)
+        val race = repo.seasons().flatMap { it.races }
+            .firstOrNull { it.season == season && it.round == round && !it.isTesting } ?: return Result.success()
+        val results = try { repo.fetchResults(race) } catch (e: Exception) { null }
+        val published = when (session) {
+            "Race" -> results?.race?.isNotEmpty() == true
+            "Sprint" -> results?.sprint?.isNotEmpty() == true
+            else -> results?.quali?.isNotEmpty() == true
+        }
+        if (!published) return if (ResultsWatch.attemptsLeft(runAttemptCount)) Result.retry() else Result.success()
+        prefs.resultsPrefetched = prefs.resultsPrefetched + key
+        try { Widgets.updateAll(ctx) } catch (e: Exception) { }
         return Result.success()
     }
 }

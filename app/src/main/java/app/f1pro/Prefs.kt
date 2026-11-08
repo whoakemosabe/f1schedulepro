@@ -123,6 +123,11 @@ class Prefs(context: Context) {
         get() = p.getStringSet("standings_refreshed", emptySet()) ?: emptySet()
         set(v) = p.edit { putStringSet("standings_refreshed", v.toSortedSet().toList().takeLast(60).toSet()) }
 
+    /** Sessions whose results have been fetched in the background (the newest 60). */
+    var resultsPrefetched: Set<String>
+        get() = p.getStringSet("results_prefetched", emptySet()) ?: emptySet()
+        set(v) = p.edit { putStringSet("results_prefetched", v.toSortedSet().toList().takeLast(60).toSet()) }
+
     var reported: Set<String>
         get() = p.getStringSet("reported", emptySet()) ?: emptySet()
         set(v) = p.edit { putStringSet("reported", v.toSortedSet().toList().takeLast(150).toSet()) }

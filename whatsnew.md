@@ -6,3 +6,4 @@ Only included when this file changed since the last release.
 
 - Results land within about 30 minutes of the chequered flag, qualifying included
 - Faster result alerts for your favourite driver
+- Results download in the background after every session, ready before you open the app
