@@ -31,6 +31,19 @@ object Net {
         }
     }
 
+    /** OpenF1's free tier allows 3 requests a second (30 a minute): one every 400 ms, app-wide. */
+    private const val OPENF1_GAP_MS = 400L
+    private val openF1Lock = Object()
+    private var openF1Last = 0L
+
+    private fun paceOpenF1() {
+        synchronized(openF1Lock) {
+            val wait = openF1Last + OPENF1_GAP_MS - System.currentTimeMillis()
+            if (wait > 0) Thread.sleep(wait)
+            openF1Last = System.currentTimeMillis()
+        }
+    }
+
     class TooManyRequests(val retryAfterMs: Long) : IOException("HTTP 429")
 
     /**
@@ -43,8 +56,10 @@ object Net {
 
     fun get(url: String, accept: String = "*/*"): String {
         val jolpica = url.contains("jolpi.ca")
+        val openF1 = url.contains("openf1.org")
         var attempt = 0
         while (true) {
+            if (openF1) paceOpenF1()
             if (jolpica) {
                 val wait = jolpicaBlockedUntil - System.currentTimeMillis()
                 if (wait > 0) throw TooManyRequests(wait)
@@ -53,6 +68,11 @@ object Net {
             try {
                 return getOnce(url, accept)
             } catch (e: TooManyRequests) {
+                if (openF1 && attempt < 2 && e.retryAfterMs <= 10_000L) {
+                    attempt++
+                    Thread.sleep(e.retryAfterMs.coerceIn(1000L, 5_000L))
+                    continue
+                }
                 if (!jolpica) throw e
                 // A short wait (the per-second limit): wait and retry once or twice. A long one
                 // (the hourly limit): stop asking until then and fail straight away.
