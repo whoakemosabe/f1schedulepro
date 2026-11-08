@@ -153,6 +153,45 @@ class LiveCheck {
             line(f.hours.size > 300 && f.days.size >= 14, "Weather (Austin): ${f.hours.size} hours, ${f.days.size} days")
         } catch (e: Exception) { line(false, "Weather: ${e.message}") }
         try {
+            // OpenF1, the primary results source: the latest finished qualifying and race, through
+            // the same matching and parsing the app uses.
+            val year = java.time.Year.now().value
+            val sessions = Net.get("${app.f1pro.data.OpenF1.BASE}/sessions?year=$year")
+            val arr = org.json.JSONArray(sessions)
+            fun latest(name: String): Pair<Long, Int>? = (0 until arr.length()).map { arr.getJSONObject(it) }
+                .filter { it.optString("session_name") == name }
+                .mapNotNull { o ->
+                    val end = try { java.time.OffsetDateTime.parse(o.optString("date_end")).toInstant().toEpochMilli() } catch (e: Exception) { null }
+                    val start = try { java.time.OffsetDateTime.parse(o.optString("date_start")).toInstant().toEpochMilli() } catch (e: Exception) { null }
+                    if (end != null && start != null && end < now - 40 * 60_000L) start to o.optInt("meeting_key") else null
+                }.maxByOrNull { it.first }
+            for (name in listOf("Qualifying", "Race")) {
+                val found = latest(name)
+                if (found == null) { line(false, "OpenF1 $name: none finished in $year"); continue }
+                val (start, meeting) = found
+                val race = app.f1pro.data.Race(year, 0, "check", null, app.f1pro.data.Circuit("x", "x", "x", "x"),
+                    listOf(app.f1pro.data.Session(name, start)), app.f1pro.data.RaceType.CONVENTIONAL)
+                val keys = app.f1pro.data.OpenF1.keys(sessions, race)
+                val raw = app.f1pro.data.OpenF1.Raw(
+                    keys,
+                    Net.get("${app.f1pro.data.OpenF1.BASE}/session_result?meeting_key=$meeting"),
+                    Net.get("${app.f1pro.data.OpenF1.BASE}/drivers?meeting_key=$meeting"),
+                    Net.get("${app.f1pro.data.OpenF1.BASE}/starting_grid?meeting_key=$meeting"),
+                )
+                val w = app.f1pro.data.OpenF1.weekend(year, 0, false, emptyList(), emptyList(), emptyList(), raw, now)
+                if (name == "Qualifying") {
+                    val p = w.quali.firstOrNull()
+                    line(w.quali.size >= 18 && p?.q3 != null && p.code.isNotBlank(),
+                        "OpenF1 qualifying (meeting $meeting): ${w.quali.size} drivers, pole ${p?.code} ${p?.best}, last ${w.quali.lastOrNull()?.let { "${it.code} ${it.part} ${it.best}" }}")
+                } else {
+                    val top = w.race.take(3)
+                    line(w.race.size >= 18 && top.firstOrNull()?.time != null && top.all { it.code.isNotBlank() },
+                        "OpenF1 race (meeting $meeting): ${w.race.size} classified, " + top.joinToString(" ") { "${it.position}.${it.code} ${it.gap} (grid ${it.grid})" } +
+                            ", last ${w.race.lastOrNull()?.let { "${it.positionText} ${it.code} ${it.gap}" }}")
+                }
+            }
+        } catch (e: Exception) { line(false, "OpenF1 results: ${e.message}") }
+        try {
             val c = app.f1pro.data.ResultParsers.teamColours(Net.get("https://api.openf1.org/v1/drivers?session_key=latest"))
             line(c.size >= 8, "Team colours (OpenF1): " + c.entries.sortedBy { it.key }.joinToString(" ") { "${it.key}=#%06X".format(it.value and 0xFFFFFF) })
         } catch (e: Exception) { line(false, "Team colours: ${e.message}") }
