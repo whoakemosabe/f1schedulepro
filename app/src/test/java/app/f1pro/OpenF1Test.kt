@@ -87,7 +87,7 @@ class OpenF1Test {
 
     @Test
     fun sprintClassification() {
-        val r = OpenF1.race(results, drivers, grid, 9902, setOf(9902, 9901), sprint = true)
+        val r = OpenF1.race(results, drivers, grid, 9902, { it in setOf(9902, 9901) }, sprint = true)
         assertEquals(listOf("NOR", "VER", "HUL", "HAM"), r.map { it.code })
         assertEquals("30:20.456", r[0].time)
         assertEquals("+2.307", r[1].time)
@@ -110,13 +110,14 @@ class OpenF1Test {
         assertEquals(4, w.quali.size)    // OpenF1 has qualifying; Jolpica doesn't yet
         assertEquals(4, w.sprint.size)
         assertEquals(1, w.race.size)     // no OpenF1 race result: Jolpica's
+        assertEquals(3, w.sprint.first { it.code == "NOR" }.gained)
         val none = OpenF1.weekend(2026, 21, true, emptyList(), emptyList(), emptyList(), null, 0L)
         assertTrue(none.isEmpty)
     }
 
     @Test
     fun jolpicaFillsInWhatOpenF1Lacks() {
-        val o = OpenF1.race(results, drivers, grid, 9902, setOf(9902, 9901), sprint = true)
+        val o = OpenF1.race(results, drivers, grid, 9902, { it in setOf(9902, 9901) }, sprint = true)
         val j = listOf(RaceResult(null, "R", "44", "HAM", "Lewis", "Hamilton", "British", "ferrari", "Ferrari", 9, 4, "Gearbox", null, 0.0, 3, "1:13.100"))
         val e = OpenF1.enrich(o, j)
         val ham = e.first { it.code == "HAM" }

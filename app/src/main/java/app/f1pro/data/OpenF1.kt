@@ -119,10 +119,10 @@ object OpenF1 {
     private val SPRINT_POINTS = listOf(8, 7, 6, 5, 4, 3, 2, 1)
 
     /**
-     * Race or sprint classification. [gridKeys] are the sessions whose starting grid applies
-     * (OpenF1 files it under the race or under the qualifying that set it, so both are accepted).
+     * Race or sprint classification. [gridFor] says whether a starting_grid row's session key
+     * belongs to this race (OpenF1 may file it under the race or the qualifying that set it).
      */
-    fun race(resultsJson: String?, driversJson: String?, gridJson: String?, sessionKey: Int?, gridKeys: Set<Int>, sprint: Boolean): List<RaceResult> {
+    fun race(resultsJson: String?, driversJson: String?, gridJson: String?, sessionKey: Int?, gridFor: (Int) -> Boolean, sprint: Boolean): List<RaceResult> {
         val rows = rows(resultsJson, sessionKey)
         if (rows.isEmpty()) return emptyList()
         val drivers = drivers(driversJson)
@@ -131,7 +131,7 @@ object OpenF1 {
             val g = JSONArray(gridJson ?: "[]")
             for (i in 0 until g.length()) {
                 val o = g.optJSONObject(i) ?: continue
-                if (o.optInt("session_key") !in gridKeys) continue
+                if (!gridFor(o.optInt("session_key"))) continue
                 val p = o.optInt("position", 0).takeIf { it > 0 } ?: continue
                 grid[o.optInt("driver_number").toString()] = p
             }
@@ -257,9 +257,10 @@ object OpenF1 {
         raw: Raw?, fetchedAt: Long,
     ): WeekendResults {
         val k = raw?.keys?.sessions.orEmpty()
-        fun keySet(vararg names: String) = names.mapNotNull { k[it] }.toSet()
-        val oRace = race(raw?.results, raw?.drivers, raw?.grid, k["Race"], keySet("Race", "Qualifying"), sprint = false)
-        val oSprint = if (isSprint) race(raw?.results, raw?.drivers, raw?.grid, k["Sprint"], keySet("Sprint", "Sprint Qualifying"), sprint = true) else emptyList()
+        // The sprint's grid sits under the sprint or sprint qualifying; anything else is the race's.
+        val sprintKeys = listOf("Sprint", "Sprint Qualifying").mapNotNull { k[it] }.toSet()
+        val oRace = race(raw?.results, raw?.drivers, raw?.grid, k["Race"], { it !in sprintKeys }, sprint = false)
+        val oSprint = if (isSprint) race(raw?.results, raw?.drivers, raw?.grid, k["Sprint"], { it in sprintKeys }, sprint = true) else emptyList()
         val oQuali = qualifying(raw?.results, raw?.drivers, k["Qualifying"])
         return WeekendResults(
             season, round,
