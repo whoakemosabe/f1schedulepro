@@ -20,9 +20,10 @@ import app.f1pro.widget.Widgets
 import java.util.concurrent.TimeUnit
 
 /**
- * After qualifying, a sprint or a race ends, waits for Jolpica to publish the classification and
- * sends one notification about the favourite driver. Results usually land within an hour or two;
- * the worker retries every 20, 40, 60… minutes until they do (about a day at most).
+ * After qualifying, a sprint or a race ends, waits for the classification (OpenF1, with Jolpica
+ * as the fallback) and sends one notification about the favourite driver. Results usually land
+ * about 30 minutes after the session; the worker retries every 20, 40, 60… minutes until they do
+ * (about a day at most).
  */
 object ResultsWatch {
     private const val MAX_ATTEMPTS = 12
@@ -35,7 +36,8 @@ object ResultsWatch {
         val wm = WorkManager.getInstance(context)
         for (slot in Planner.finishedForReport(seasons, now)) {
             if (slot.key in reported) continue
-            val delay = (slot.session.end + 20 * MIN_MS - now).coerceAtLeast(0)
+            // OpenF1 opens a session's results to everyone 30 minutes after it ends.
+            val delay = (slot.session.end + 35 * MIN_MS - now).coerceAtLeast(0)
             val request = OneTimeWorkRequestBuilder<ResultsWorker>()
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

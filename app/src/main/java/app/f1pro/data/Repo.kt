@@ -136,6 +136,7 @@ class Repo(context: Context) {
     companion object {
         const val JOLPICA = "https://api.jolpi.ca/ergast/f1"
         const val F1API = "https://f1api.dev/api/current"
+        private val RESULT_SESSIONS = setOf("Race", "Qualifying", "Sprint", "Sprint Qualifying")
         val NEWS = listOf(
             NewsSource("RACER", "https://racer.com/f1/feed/"),
             NewsSource("Autosport", "https://www.autosport.com/rss/feed/f1"),
@@ -268,49 +269,106 @@ class Repo(context: Context) {
 
     private fun resultsFile(season: Int, round: Int) = File(dir, "results-$season-$round.json")
 
-    fun cachedResults(season: Int, round: Int): WeekendResults? = try {
+    fun cachedResults(season: Int, round: Int, isSprint: Boolean = true): WeekendResults? = try {
         val o = JSONObject(resultsFile(season, round).readText())
-        WeekendResults(
-            season, round,
-            race = o.optString("race").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it) }.orEmpty(),
-            sprint = o.optString("sprint").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") }.orEmpty(),
-            quali = o.optString("quali").takeIf { it.isNotBlank() }?.let { ResultParsers.qualifying(it) }.orEmpty(),
+        OpenF1.weekend(
+            season, round, isSprint,
+            jRace = o.optString("race").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it) }.orEmpty(),
+            jSprint = o.optString("sprint").takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") }.orEmpty(),
+            jQuali = o.optString("quali").takeIf { it.isNotBlank() }?.let { ResultParsers.qualifying(it) }.orEmpty(),
+            raw = openF1Raw(o),
             fetchedAt = o.optLong("at"),
         )
     } catch (e: Exception) { null }
 
-    /** Race, sprint (on sprint weekends) and qualifying classifications for one round. */
+    private fun openF1Raw(o: JSONObject): OpenF1.Raw? {
+        val of = o.optJSONObject("openf1") ?: return null
+        fun s(k: String) = of.optString(k).takeIf { it.isNotBlank() }
+        return OpenF1.Raw(OpenF1.Keys.fromJson(of.optJSONObject("keys")), s("results"), s("drivers"), s("grid"))
+    }
+
+    /** OpenF1's session list for a season, saved for 12 hours (an hour when it lacked what we needed). */
+    private fun openF1Keys(race: Race): OpenF1.Keys? {
+        val f = File(dir, "openf1-sessions-${race.season}.json")
+        val now = System.currentTimeMillis()
+        if (f.exists()) {
+            val keys = OpenF1.keys(f.readText(), race)
+            val age = now - f.lastModified()
+            if (age < (if (keys != null && keys.sessions.size >= race.sessions.count { it.name in RESULT_SESSIONS }) 12 * HOUR_MS else HOUR_MS)) return keys
+        }
+        return try {
+            val raw = Net.get("${OpenF1.BASE}/sessions?year=${race.season}", "application/json")
+            f.writeText(raw)
+            OpenF1.keys(raw, race)
+        } catch (e: Exception) {
+            if (f.exists()) OpenF1.keys(f.readText(), race) else null
+        }
+    }
+
+    /**
+     * The OpenF1 feeds for one weekend (results, drivers, grid: three requests). Each feed that
+     * fails keeps what was saved before. Null before 2023 or when nothing could be had; the flag
+     * says whether OpenF1 answered with results this time.
+     */
+    private fun fetchOpenF1(race: Race, old: OpenF1.Raw?): Pair<OpenF1.Raw?, Boolean> {
+        if (race.season < OpenF1.FIRST_SEASON) return null to false
+        val keys = openF1Keys(race) ?: old?.keys ?: return old to false
+        fun get(path: String) = try {
+            Net.get("${OpenF1.BASE}/$path?meeting_key=${keys.meeting}", "application/json").takeIf { it.trim().startsWith("[") }
+        } catch (e: Exception) { null }
+        val results = get("session_result")
+        val drivers = if (results != null) get("drivers") else null
+        val grid = if (results != null) get("starting_grid") else null
+        return OpenF1.Raw(keys, results ?: old?.results, drivers ?: old?.drivers, grid ?: old?.grid) to (results != null)
+    }
+
+    /**
+     * Race, sprint (on sprint weekends) and qualifying classifications for one round. OpenF1
+     * first (minutes after the session); Jolpica alongside, as the fallback and for the details
+     * OpenF1 lacks.
+     */
     suspend fun fetchResults(race: Race): WeekendResults = withContext(Dispatchers.IO) {
         val base = "$JOLPICA/${race.season}/${race.round}"
+        val old = try { JSONObject(resultsFile(race.season, race.round).readText()) } catch (e: Exception) { JSONObject() }
         coroutineScope {
+            val of = async { try { fetchOpenF1(race, openF1Raw(old)) } catch (e: Exception) { openF1Raw(old) to false } }
             val r = async { try { Net.get("$base/results.json?limit=40", "application/json") } catch (e: Exception) { null } }
             val q = async { try { Net.get("$base/qualifying.json?limit=40", "application/json") } catch (e: Exception) { null } }
             val sp = async {
                 if (race.isSprint) try { Net.get("$base/sprint.json?limit=40", "application/json") } catch (e: Exception) { null } else ""
             }
+            val (ofRaw, ofReached) = of.await()
             val rj = r.await()
             val qj = q.await()
             val sj = sp.await()
-            if (rj == null && qj == null && sj.isNullOrEmpty()) throw IOException("Couldn't reach the results feed")
-            val prev = cachedResults(race.season, race.round)
-            val res = WeekendResults(
-                race.season, race.round,
-                race = rj?.let { ResultParsers.race(it) } ?: prev?.race.orEmpty(),
-                sprint = sj?.takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") } ?: prev?.sprint.orEmpty(),
-                quali = qj?.let { ResultParsers.qualifying(it) } ?: prev?.quali.orEmpty(),
-                fetchedAt = System.currentTimeMillis(),
-            )
+            if (rj == null && qj == null && sj.isNullOrEmpty() && !ofReached) throw IOException("Couldn't reach the results feeds")
             // Keep the raw feeds that worked; fall back to what was cached for the ones that didn't.
-            val old = try { JSONObject(resultsFile(race.season, race.round).readText()) } catch (e: Exception) { JSONObject() }
-            resultsFile(race.season, race.round).writeText(
-                JSONObject()
-                    .put("race", rj ?: old.optString("race"))
-                    .put("sprint", sj ?: old.optString("sprint"))
-                    .put("quali", qj ?: old.optString("quali"))
-                    .put("at", res.fetchedAt)
-                    .toString()
+            val raceJ = rj ?: old.optString("race")
+            val sprintJ = sj ?: old.optString("sprint")
+            val qualiJ = qj ?: old.optString("quali")
+            val now = System.currentTimeMillis()
+            val saved = JSONObject()
+                .put("race", raceJ)
+                .put("sprint", sprintJ)
+                .put("quali", qualiJ)
+                .put("at", now)
+            if (ofRaw != null) {
+                saved.put("openf1", JSONObject().apply {
+                    ofRaw.keys?.let { put("keys", it.toJson()) }
+                    ofRaw.results?.let { put("results", it) }
+                    ofRaw.drivers?.let { put("drivers", it) }
+                    ofRaw.grid?.let { put("grid", it) }
+                })
+            }
+            resultsFile(race.season, race.round).writeText(saved.toString())
+            OpenF1.weekend(
+                race.season, race.round, race.isSprint,
+                jRace = raceJ.takeIf { it.isNotBlank() }?.let { ResultParsers.race(it) }.orEmpty(),
+                jSprint = sprintJ.takeIf { it.isNotBlank() }?.let { ResultParsers.race(it, "SprintResults") }.orEmpty(),
+                jQuali = qualiJ.takeIf { it.isNotBlank() }?.let { ResultParsers.qualifying(it) }.orEmpty(),
+                raw = ofRaw,
+                fetchedAt = now,
             )
-            res
         }
     }
 

@@ -155,7 +155,7 @@ fun ResultsCard(state: AppState, race: Race, now: Long) {
                         style = inter(13.sp, FontWeight.Medium, C.TextSecondary),
                     )
                     Text(
-                        "They usually appear an hour or two after the session.",
+                        "They usually appear about half an hour after the session.",
                         style = inter(12.sp, color = C.TextMuted),
                         textAlign = TextAlign.Center,
                     )

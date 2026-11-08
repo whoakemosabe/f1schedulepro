@@ -166,7 +166,7 @@ class AppState(context: Context, private val scope: CoroutineScope) {
 
     fun loadResults(race: app.f1pro.data.Race) {
         val key = race.key
-        if (key !in results) repo.cachedResults(race.season, race.round)?.let { results[key] = it }
+        if (key !in results) repo.cachedResults(race.season, race.round, race.isSprint)?.let { results[key] = it }
         val have = results[key]
         val now = System.currentTimeMillis()
         // Refetched at most every 10 minutes while results may still be landing or amended;
